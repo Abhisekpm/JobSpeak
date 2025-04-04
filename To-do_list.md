@@ -3,19 +3,19 @@
 ## Phase 1: Foundation & Core Setup
 
 ### Backend (Django)
-- [ ] Initialize Django project (`django-admin startproject backend`)
-- [ ] Create main Django app (`python manage.py startapp api`)
-- [ ] Install Django REST Framework (`pip install djangorestframework`)
-- [ ] Install Django CORS Headers (`pip install django-cors-headers`)
-- [ ] Add `rest_framework`, `corsheaders`, `api` to `INSTALLED_APPS` in `settings.py`
-- [ ] Add `corsheaders.middleware.CorsMiddleware` to `MIDDLEWARE` in `settings.py`
-- [ ] Configure database (SQLite for dev) in `settings.py`
-- [ ] Configure `CORS_ALLOWED_ORIGINS` (or `CORS_ALLOW_ALL_ORIGINS=True` for dev) in `settings.py`
-- [ ] Define `Conversation` model in `api/models.py` (include fields like `name`, `created_at`, `status`)
-- [ ] Run initial migrations (`python manage.py makemigrations api`, `python manage.py migrate`)
-- [ ] Create `ConversationSerializer` in `api/serializers.py`
-- [ ] Create `ConversationViewSet` (e.g., `ModelViewSet`) in `api/views.py`
-- [ ] Set up URL routing for the API in `api/urls.py` and project `urls.py`
+- [x] Initialize Django project (`django-admin startproject backend`)
+- [x] Create main Django app (`python manage.py startapp api`)
+- [x] Install Django REST Framework (`pip install djangorestframework`)
+- [x] Install Django CORS Headers (`pip install django-cors-headers`)
+- [x] Add `rest_framework`, `corsheaders`, `api` to `INSTALLED_APPS` in `settings.py`
+- [x] Add `corsheaders.middleware.CorsMiddleware` to `MIDDLEWARE` in `settings.py`
+- [x] Configure database (SQLite for dev) in `settings.py` - *Default setup used*
+- [x] Configure `CORS_ALLOWED_ORIGINS` (or `CORS_ALLOW_ALL_ORIGINS=True` for dev) in `settings.py`
+- [x] Define `Conversation` model in `api/models.py` (include fields like `name`, `created_at`, `status`)
+- [x] Run initial migrations (`python manage.py makemigrations api`, `python manage.py migrate`)
+- [x] Create `ConversationSerializer` in `api/serializers.py`
+- [x] Create `ConversationViewSet` (e.g., `ModelViewSet`) in `api/views.py`
+- [x] Set up URL routing for the API in `api/urls.py` and project `urls.py`
 
 ### Frontend (React)
 - [x] Initialize React project (e.g., `npx create-react-app frontend` or Vite) - *Assuming this was done initially*
