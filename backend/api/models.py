@@ -16,5 +16,11 @@ class Conversation(models.Model):
     # Add duration field (in seconds)
     duration = models.PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds")
 
+    transcription_text = models.TextField(null=True, blank=True)
+    analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis")
+
+    status_transcription = models.CharField(max_length=50, default='none')
+    status_analysis = models.CharField(max_length=50, default='none')
+
     def __str__(self):
         return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})" 
