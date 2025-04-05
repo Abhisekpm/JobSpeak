@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import apiClient from "../lib/apiClient"; // Import apiClient
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Card } from "./ui/card";
@@ -7,12 +8,15 @@ import TranscriptionView from "./TranscriptionView";
 import AnalysisPanel from "./AnalysisPanel";
 import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
 
+// Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
 interface Conversation {
-  id: string;
-  title: string;
-  date: string;
-  duration: number;
-  // audioUrl?: string; // If you plan to store audio URLs
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  audio_file: string | null; // URL to the audio file
+  duration: number | null; // Duration in seconds from backend
 }
 
 const ConversationDetail: React.FC = () => {
@@ -25,39 +29,40 @@ const ConversationDetail: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
 
+  // Effect to load data from API when component mounts or ID changes
   useEffect(() => {
     setIsLoading(true);
     setError(null);
 
     if (!id) {
-      setError("Conversation ID is missing.");
+      setError("Conversation ID is missing from URL.");
       setIsLoading(false);
       return;
     }
 
-    try {
-      const savedConversationsJSON = localStorage.getItem('conversations');
-      if (savedConversationsJSON) {
-        const allConversations: Conversation[] = JSON.parse(savedConversationsJSON);
-        const foundConversation = allConversations.find(conv => conv.id === id);
-        if (foundConversation) {
-          setConversation(foundConversation);
+    const fetchConversationDetail = async () => {
+      try {
+        // Fetch specific conversation from the backend API
+        const response = await apiClient.get<Conversation>(`/conversations/${id}/`);
+        setConversation(response.data);
+      } catch (err: any) {
+        console.error("Error fetching conversation detail:", err);
+        if (err.response?.status === 404) {
+            setError(`Conversation with ID "${id}" not found.`);
         } else {
-          setError(`Conversation with ID "${id}" not found.`);
+            setError("Failed to load conversation details due to an error.");
         }
-      } else {
-        setError("No saved conversations found in local storage.");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error("Error loading conversation:", err);
-      setError("Failed to load conversation details due to an error.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
+    };
 
-  const formatDuration = (seconds: number | undefined): string => {
-    if (seconds === undefined || isNaN(seconds)) return "0:00";
+    fetchConversationDetail();
+
+  }, [id]); // Re-run effect if ID changes
+
+  const formatDuration = (seconds: number | null | undefined): string => {
+    if (seconds === null || seconds === undefined || isNaN(seconds) || seconds < 0) return "--:--";
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
@@ -65,7 +70,13 @@ const ConversationDetail: React.FC = () => {
 
   const togglePlayback = () => {
     setIsPlaying(!isPlaying);
-    // TODO: Implement actual audio playback control
+    // TODO: Implement actual audio playback control using conversation.audio_file URL
+    if (conversation?.audio_file) {
+        console.log("Audio URL:", conversation.audio_file);
+        // Add logic here to load and control an <audio> element
+    } else {
+        console.log("No audio file URL available.");
+    }
   };
 
   const handleBack = () => {
@@ -86,12 +97,25 @@ const ConversationDetail: React.FC = () => {
   }
 
   if (!conversation) {
-    // Should be caught by error state, but as a fallback
     return <div className="p-6 text-center">Conversation data is unavailable.</div>;
   }
 
-  const { title, date, duration } = conversation;
-  const currentDuration = duration || 0;
+  // Helper function to format date (can be moved to utils if needed)
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (e) {
+      return "Invalid Date";
+    }
+  };
+
+  // Destructure data from the loaded conversation state
+  // Use 'name' field for title
+  const { name: title, created_at, duration, audio_file } = conversation;
+  const currentDuration = duration;
+
+  // Format date using the helper function defined above
+  const date = formatDate(created_at);
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 p-4 md:p-6">
@@ -131,6 +155,7 @@ const ConversationDetail: React.FC = () => {
             className="h-10 w-10 rounded-full"
             onClick={togglePlayback}
             aria-label={isPlaying ? "Pause playback" : "Start playback"}
+            disabled={!audio_file} // Disable play if no audio file URL
           >
             {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
           </Button>
@@ -138,7 +163,7 @@ const ConversationDetail: React.FC = () => {
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-150"
-                style={{ width: `${currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0}%` }}
+                style={{ width: `${currentDuration && currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0}%` }}
               />
             </div>
             <div className="flex justify-between text-xs text-gray-500 mt-1">

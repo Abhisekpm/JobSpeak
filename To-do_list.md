@@ -51,10 +51,10 @@
 - [x] Create `AudioUploader.js` component - *Implemented as Upload tab in `RecordingModal.tsx`*
 - [x] Add `<input type="file" accept="audio/*">` to `AudioUploader.js` - *Done in `RecordingModal.tsx`*
 - [x] Implement file selection handler (`onChange`) to get the `File` object - *Done in `RecordingModal.tsx`*
-- [ ] Update `apiClient.js` or create a function to upload audio (Blob or File)
-- [ ] Use `FormData` to prepare the audio data for the POST request
-- [ ] Trigger the upload function from `AudioRecorder.js` (on stop) and `AudioUploader.js` (on file select/submit) - *Currently saving Blob/File to state*
-- [x] Add HTML5 `<audio>` element to play back audio (using the URL from the API) - *Element present in `ConversationDetail.tsx`, but playback logic is basic*
+- [x] Update `apiClient.js` or create a function to upload audio (Blob or File) - *Upload logic implemented in `handleSaveRecording` using apiClient*
+- [x] Use `FormData` to prepare the audio data for the POST request - *Done in `handleSaveRecording`*
+- [x] Trigger the upload function from `AudioRecorder.js` (on stop) and `AudioUploader.js` (on file select/submit) - *Triggered via Save button in `RecordingModal`*
+- [x] Add HTML5 `<audio>` element to play back audio (using the URL from the API) - *Element/UI present in `ConversationDetail.tsx`, playback logic basic*
 
 ## Phase 3: Transcription & Analysis Integration
 
