@@ -19,24 +19,24 @@
 
 ### Frontend (React)
 - [x] Initialize React project (e.g., `npx create-react-app frontend` or Vite) - *Assuming this was done initially*
-- [x] Install necessary packages (`axios`, `react-router-dom`, UI library like `@mui/material` if desired) - *Using react-router-dom, shadcn/ui*
+- [x] Install necessary packages (`axios`, `react-router-dom`, UI library like `@mui/material` if desired) - *Using react-router-dom, shadcn/ui, axios*
 - [x] Set up basic React Router (`BrowserRouter`, `Routes`, `Route`) in `App.js` or `index.js`
 - [x] Create core layout components (`Layout.js`, `Header.js`, etc.) - *Created Header, Home*
 - [x] Create placeholder pages/components (`HomePage.js`, `DashboardPage.js`) - *Created Home, ConversationDetail*
-- [ ] Create an API client utility (`apiClient.js`) using `axios` or `Workspace`
-- [ ] Test basic API call from a React component to fetch data from the Django backend (e.g., fetch an empty list of conversations)
+- [x] Create an API client utility (`apiClient.js`) using `axios` or `Workspace` - *Created `src/lib/apiClient.ts`*
+- [x] Test basic API call from a React component to fetch data from the Django backend (e.g., fetch an empty list of conversations) - *Implemented in `Home.tsx`*
 
 ## Phase 2: Audio Input Implementation
 
 ### Backend (Django)
-- [ ] Add `audio_file` (`FileField`) to `Conversation` model in `api/models.py`
-- [ ] Configure `MEDIA_ROOT` and `MEDIA_URL` in `settings.py` for file uploads
-- [ ] Configure URL patterns for serving media files during development
-- [ ] Run migrations for the new `audio_file` field
-- [ ] Update `ConversationViewSet` or create a dedicated upload view/endpoint to handle POST requests with `multipart/form-data`
-- [ ] Implement logic in the view to save the uploaded audio file using Django's storage system
-- [ ] Implement logic to create or update the `Conversation` record, linking it to the saved audio file path/URL
-- [ ] Ensure the API response for a conversation includes the URL to its audio file
+- [x] Add `audio_file` (`FileField`) to `Conversation` model in `api/models.py`
+- [x] Configure `MEDIA_ROOT` and `MEDIA_URL` in `settings.py` for file uploads
+- [x] Configure URL patterns for serving media files during development
+- [x] Run migrations for the new `audio_file` field
+- [x] Update `ConversationViewSet` or create a dedicated upload view/endpoint to handle POST requests with `multipart/form-data` - *Added parsers to ModelViewSet*
+- [x] Implement logic in the view to save the uploaded audio file using Django's storage system - *Implicitly handled by ModelViewSet/Serializer*
+- [x] Implement logic to create or update the `Conversation` record, linking it to the saved audio file path/URL - *Implicitly handled by ModelViewSet/Serializer*
+- [x] Ensure the API response for a conversation includes the URL to its audio file - *Implicitly handled by FileField in Serializer*
 
 ### Frontend (React)
 - [x] Create `AudioRecorder.js` component - *Implemented as part of `RecordingModal.tsx`*
@@ -84,20 +84,20 @@
 ## Phase 4: Dashboard & UI/UX Refinement
 
 ### Frontend (React)
-- [x] Create `Dashboard.js` component - *Implemented as `Home.tsx`*
-- [x] Use `useEffect` in `Dashboard.js` to fetch the list of conversations (`/api/conversations/`) from the backend on component mount - *Fetching from `localStorage` currently*
-- [x] Render the list of conversations in `Dashboard.js` (e.g., using a table or list component from a UI library)
-    - [x] Display key info: Name, Date, Status (Transcription/Analysis) - *Displaying Title, Date, Duration*
-- [x] Set up routing for individual conversations (e.g., `/conversations/:id`) pointing to `ConversationDetail.js`
-- [x] Add navigation links (`<Link>`) from each item in the dashboard list to its detail view - *Using `onClick` + `navigate`*
-- [x] Implement the "+" icon/button (e.g., Floating Action Button - FAB)
-- [x] Create a Modal or Menu component triggered by the "+" button - *Implemented `RecordingModal.tsx`*
-- [x] Add options ("Record New Conversation", "Upload Audio File") to the Modal/Menu
-- [x] Connect Modal/Menu options to initiate the respective `AudioRecorder` or `AudioUploader` flow/component display
-- [x] Refine overall CSS and styling for consistency and usability - *Adjusted grid spacing*
-- [x] Implement responsive design using media queries or UI library grid/layout components - *Basic responsiveness via Tailwind classes*
+- [ ] Create `Dashboard.js` component
+- [ ] Use `useEffect` in `Dashboard.js` to fetch the list of conversations (`/api/conversations/`) from the backend on component mount
+- [ ] Render the list of conversations in `Dashboard.js` (e.g., using a table or list component from a UI library)
+    - [ ] Display key info: Name, Date, Status (Transcription/Analysis)
+- [ ] Set up routing for individual conversations (e.g., `/conversations/:id`) pointing to `ConversationDetail.js`
+- [ ] Add navigation links (`<Link>`) from each item in the dashboard list to its detail view
+- [ ] Implement the "+" icon/button (e.g., Floating Action Button - FAB)
+- [ ] Create a Modal or Menu component triggered by the "+" button
+- [ ] Add options ("Record New Conversation", "Upload Audio File") to the Modal/Menu
+- [ ] Connect Modal/Menu options to initiate the respective `AudioRecorder` or `AudioUploader` flow/component display
+- [ ] Refine overall CSS and styling for consistency and usability
+- [ ] Implement responsive design using media queries or UI library grid/layout components
 - [ ] Test responsiveness on different screen sizes (desktop, tablet, mobile)
-- [x] Review semantic HTML usage (`<nav>`, `<main>`, `<article>`, `<button>`, etc.) - *Basic usage seems okay*
+- [ ] Review semantic HTML usage (`<nav>`, `<main>`, `<article>`, `<button>`, etc.)
 - [ ] Check basic accessibility (keyboard navigation, focus indicators, button labels)
 
 ## Phase 5: Testing, Polish & Deployment Prep

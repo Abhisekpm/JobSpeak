@@ -123,6 +123,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# Add settings for Media files (user-uploaded content)
+MEDIA_URL = '/media/' # URL prefix for media files
+# Absolute filesystem path to the directory that will hold user-uploaded files.
+# Example: "/home/media/media.lawrence.com/media/"
+MEDIA_ROOT = BASE_DIR / 'media' # Store media files in a 'media' directory at the project root
 
 # CORS Settings (Allow all origins for development)
 CORS_ALLOW_ALL_ORIGINS = True
