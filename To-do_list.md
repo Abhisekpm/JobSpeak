@@ -34,7 +34,7 @@
 - [x] Configure URL patterns for serving media files during development
 - [x] Run migrations for the new `audio_file` field
 - [x] Update `ConversationViewSet` or create a dedicated upload view/endpoint to handle POST requests with `multipart/form-data` - *Added parsers to ModelViewSet*
-- [x] Implement logic in the view to save the uploaded audio file using Django's storage system - *Implicitly handled by ModelViewSet/Serializer*
+- [x] Implement logic in the view to save the uploaded audio file using Django's storage system - *Implicitly handled by ModelViewSet/Serializer; added file deletion on destroy*
 - [x] Implement logic to create or update the `Conversation` record, linking it to the saved audio file path/URL - *Implicitly handled by ModelViewSet/Serializer*
 - [x] Ensure the API response for a conversation includes the URL to its audio file - *Implicitly handled by FileField in Serializer*
 

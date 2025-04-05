@@ -17,13 +17,15 @@ import RecordingControls from "./RecordingControls";
 interface RecordingModalProps {
   isOpen?: boolean;
   onClose?: () => void;
-  onSave?: (data: { title: string; audio: Blob; duration: number }) => void;
+  onSave?: (data: { title: string; audio: Blob; duration: number }) => void | Promise<void>;
+  isSaving?: boolean;
 }
 
 const RecordingModal = ({
   isOpen = false,
   onClose = () => {},
   onSave = () => {},
+  isSaving = false,
 }: RecordingModalProps) => {
   const [activeTab, setActiveTab] = useState<"record" | "upload">("record");
   const [title, setTitle] = useState<string>("");
@@ -55,18 +57,21 @@ const RecordingModal = ({
 
   // Timer for recording duration
   useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
     if (isRecording && !isPaused) {
-      timerRef.current = window.setInterval(() => {
-        setDuration((prev) => prev + 1);
+      interval = setInterval(() => {
+        setDuration((prevDuration) => prevDuration + 1);
+        // Simulate audio data for waveform during recording
+        setAudioData((prevData) => [
+          ...prevData.slice(-100), // Keep last 100 points
+          Math.random() * 100,
+        ]);
       }, 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
+    } else if (interval) {
+      clearInterval(interval);
     }
-
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (interval) clearInterval(interval);
     };
   }, [isRecording, isPaused]);
 
@@ -172,24 +177,42 @@ const RecordingModal = ({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Prevent saving if already saving
+    if (isSaving) return; 
+
+    let saveData: { title: string; audio: Blob; duration: number } | null = null;
+
     if (activeTab === "record" && audioBlob) {
-      onSave({
+      saveData = {
         title: title || "Untitled Recording",
         audio: audioBlob,
-        duration,
-      });
-      resetState();
-      onClose();
+        duration: duration,
+      };
     } else if (activeTab === "upload" && uploadedFile) {
-      // In a real implementation, we would process the uploaded file
-      onSave({
+      // For upload, we might want to pass the File object directly
+      // or read it as a Blob if the onSave handler expects a Blob
+      // Assuming onSave can handle a File for now, let's pass it as Blob for consistency
+      const uploadedBlob = new Blob([uploadedFile], { type: uploadedFile.type });
+      saveData = {
         title: title || uploadedFile.name,
-        audio: uploadedFile,
-        duration,
-      });
-      resetState();
-      onClose();
+        audio: uploadedBlob, // Pass Blob
+        duration: duration, // Duration might need calculation for uploaded files
+      };
+    }
+
+    if (saveData) {
+      try {
+        await onSave(saveData);
+        // Only reset and close if save was successful (onSave didn't throw)
+        // If onSave is not async or doesn't throw, this always runs
+        resetState();
+        // onClose(); // Let parent handle closing after successful save
+      } catch (error) {
+        // Error handled in parent (home.tsx)
+        console.error("onSave handler threw an error:", error);
+        // Do not close the modal or reset state if onSave failed
+      }
     }
   };
 
@@ -327,11 +350,12 @@ const RecordingModal = ({
           <Button
             onClick={handleSave}
             disabled={
+              isSaving ||
               (activeTab === "record" && !audioBlob) ||
               (activeTab === "upload" && !uploadedFile)
             }
           >
-            Save
+            {isSaving ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
