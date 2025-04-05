@@ -59,8 +59,8 @@
 ## Phase 3: Transcription & Analysis Integration
 
 ### Backend (Django)
-- [ ] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField)
-- [ ] Run migrations for new model fields
+- [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField)
+- [x] Run migrations for new model fields
 - [ ] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay)
 - [ ] Create `api/services/analysis.py` with a placeholder function `request_analysis(transcription_text)` that returns dummy JSON/dict (and maybe simulates delay)
 - [ ] Add custom actions (`@action(detail=True, methods=['post'])`) to `ConversationViewSet`:
