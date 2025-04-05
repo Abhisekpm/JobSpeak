@@ -6,6 +6,18 @@ def conversation_audio_path(instance, filename):
     return f'conversations/{instance.id}/{filename}'
 
 class Conversation(models.Model):
+    # Transcription Status Choices
+    STATUS_PENDING = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    TRANSCRIPTION_STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
     name = models.CharField(max_length=255, blank=True, default='Untitled Conversation')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -16,11 +28,15 @@ class Conversation(models.Model):
     # Add duration field (in seconds)
     duration = models.PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds")
 
-    transcription_text = models.TextField(null=True, blank=True)
-    analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis")
-
-    status_transcription = models.CharField(max_length=50, default='none')
-    status_analysis = models.CharField(max_length=50, default='none')
+    # Phase 3 Fields
+    status_transcription = models.CharField(
+        max_length=20,
+        choices=TRANSCRIPTION_STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    transcription_text = models.TextField(blank=True, null=True)
+    # analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis") # Removed for now
+    # status_analysis = models.CharField(max_length=50, default='none') # Removed for now
 
     def __str__(self):
         return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})" 

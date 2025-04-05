@@ -6,6 +6,12 @@ from .serializers import ConversationSerializer
 # Import Django's default storage
 from django.core.files.storage import default_storage
 
+# Import the transcription trigger function from the correct path
+from .services.transcription import trigger_transcription
+
+# Import the Celery task
+from .tasks import process_transcription_task
+
 class ConversationViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows conversations to be viewed or edited.
@@ -17,6 +23,22 @@ class ConversationViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser) # Add parsers for file uploads
     # Add permission classes later if needed (e.g., IsAuthenticated)
     # permission_classes = [] 
+
+    # Override perform_create to enqueue transcription task
+    def perform_create(self, serializer):
+        """Save instance and then enqueue transcription task if audio exists."""
+        instance = serializer.save()
+        print(f"Saved new Conversation with ID: {instance.id}")
+
+        if instance.audio_file:
+            print(f"Scheduling background transcription task for Conversation ID: {instance.id}")
+            # Schedule the task using django-background-tasks
+            process_transcription_task(instance.id) # Just call the function
+            # Note: Status is initially PENDING by model default
+        else:
+            print(f"No audio file uploaded for Conversation ID: {instance.id}. Transcription not triggered.")
+            instance.status_transcription = Conversation.STATUS_FAILED
+            instance.save(update_fields=['status_transcription'])
 
     # Override destroy to delete the associated audio file
     def perform_destroy(self, instance):

@@ -59,27 +59,27 @@
 ## Phase 3: Transcription & Analysis Integration
 
 ### Backend (Django)
-- [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField)
+- [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField) - *Added transcription fields*
 - [x] Run migrations for new model fields
-- [ ] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay)
+- [x] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay) - *Created `trigger_transcription` logic in `api/tasks.py`*
 - [ ] Create `api/services/analysis.py` with a placeholder function `request_analysis(transcription_text)` that returns dummy JSON/dict (and maybe simulates delay)
 - [ ] Add custom actions (`@action(detail=True, methods=['post'])`) to `ConversationViewSet`:
-    - [ ] `transcribe` action: Calls `request_transcription`, updates status/results, saves model.
+    - [-] `transcribe` action: Calls `request_transcription`, updates status/results, saves model. - *Removed button, using auto-trigger*
     - [ ] `analyze` action: Calls `request_analysis`, updates status/results, saves model.
-- [ ] Update `ConversationSerializer` to include the new fields and statuses
-- [ ] *(Optional)* Set up Celery, Redis/RabbitMQ for async tasks
-- [ ] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis
-- [ ] *(Optional)* Modify viewset actions to dispatch async tasks instead of direct calls
+- [x] Update `ConversationSerializer` to include the new fields and statuses
+- [x] *(Optional)* Set up Celery, Redis/RabbitMQ for async tasks - *Implemented using django-background-tasks instead*
+- [x] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis - *Defined background task in `api/tasks.py`*
+- [x] *(Optional)* Modify viewset actions to dispatch async tasks instead of direct calls - *Modified `perform_create` to schedule background task*
 
 ### Frontend (React)
 - [x] Create `ConversationDetail.js` component (if not already started)
-- [ ] Add "Transcribe" button to `ConversationDetail.js`
+- [-] Add "Transcribe" button to `ConversationDetail.js` - *Removed due to automatic transcription workflow*
 - [ ] Add "Analyze" button to `ConversationDetail.js` (potentially enabled only after transcription is complete)
-- [ ] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.)
-- [ ] Display `transcription_text` in `ConversationDetail.js` when available
+- [-] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.) - *Handler for Transcribe button removed*
+- [x] Display `transcription_text` in `ConversationDetail.js` when available - *Passed prop to `TranscriptionView`*
 - [ ] Display formatted `analysis_results` in `ConversationDetail.js` when available
-- [ ] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data
-- [ ] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button)
+- [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Passed status props to `TranscriptionView`*
+- [x] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button) - *Polling implemented in `ConversationDetail`*
 
 ## Phase 4: Dashboard & UI/UX Refinement
 
@@ -127,11 +127,4 @@
 - [ ] Create `requirements.txt` for Python dependencies
 - [ ] Verify `package.json` and `package-lock.json` for Node dependencies
 - [ ] Create `Dockerfile` for the Django backend application
-- [ ] Create `Dockerfile` for the React frontend application (consider multi-stage builds)
-- [ ] Create `.dockerignore` files for both frontend and backend
-- [ ] Create `docker-compose.yml` for easy local development setup (backend, frontend, database, redis if needed)
-- [ ] Manage environment variables (use `.env` files locally, system environment variables in production)
-- [ ] Configure production settings in Django (`SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`, database, static/media file storage like S3)
-- [ ] Set up static file serving for Django admin (if used) and collected static files
-- [ ] Choose and configure a WSGI server (e.g., Gunicorn)
-- [ ] Choose and configure a web server/proxy (e.g., Nginx)
+- [ ] Create `

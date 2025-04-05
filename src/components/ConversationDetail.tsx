@@ -17,6 +17,10 @@ interface Conversation {
   status: string;
   audio_file: string | null; // URL to the audio file
   duration: number | null; // Duration in seconds from backend
+  // Add Phase 3 fields
+  status_transcription: string;
+  status_transcription_display: string;
+  transcription_text: string | null;
 }
 
 const ConversationDetail: React.FC = () => {
@@ -31,34 +35,72 @@ const ConversationDetail: React.FC = () => {
 
   // Effect to load data from API when component mounts or ID changes
   useEffect(() => {
-    setIsLoading(true);
-    setError(null);
-
-    if (!id) {
-      setError("Conversation ID is missing from URL.");
-      setIsLoading(false);
-      return;
-    }
+    let isMounted = true; // Prevent state updates on unmounted component
+    let intervalId: NodeJS.Timeout | null = null; // For polling
 
     const fetchConversationDetail = async () => {
+      if (!isMounted) return; // Don't fetch if component unmounted
+      // Keep loading state only for initial load?
+      // setIsLoading(true);
+      // setError(null); // Don't clear error on refetch?
+
       try {
-        // Fetch specific conversation from the backend API
         const response = await apiClient.get<Conversation>(`/conversations/${id}/`);
-        setConversation(response.data);
+        if (isMounted) {
+            setConversation(response.data);
+            // Check if transcription is still processing
+            if (response.data.status_transcription === 'processing' || response.data.status_transcription === 'pending') {
+                // If processing, schedule a refetch (polling)
+                if (!intervalId) { // Start polling only once
+                    console.log("Transcription processing, starting poll...");
+                    intervalId = setInterval(fetchConversationDetail, 5000); // Poll every 5 seconds
+                }
+            } else {
+                // If completed or failed, stop polling
+                if (intervalId) {
+                    console.log("Transcription finished, stopping poll.");
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
+            setError(null); // Clear error on successful fetch
+        }
       } catch (err: any) {
         console.error("Error fetching conversation detail:", err);
-        if (err.response?.status === 404) {
-            setError(`Conversation with ID "${id}" not found.`);
-        } else {
-            setError("Failed to load conversation details due to an error.");
+        if (isMounted) {
+            if (err.response?.status === 404) {
+                setError(`Conversation with ID "${id}" not found.`);
+            } else {
+                setError("Failed to load conversation details due to an error.");
+            }
+             // Stop polling on error
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
         }
       } finally {
-        setIsLoading(false);
+          if (isMounted) {
+            setIsLoading(false); // Set loading false after first fetch attempt
+          }
       }
     };
 
-    fetchConversationDetail();
+    if (id) {
+        fetchConversationDetail(); // Initial fetch
+    } else {
+        setError("Conversation ID is missing from URL.");
+        setIsLoading(false);
+    }
 
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        console.log("Cleaning up polling interval.");
+        clearInterval(intervalId);
+      }
+    };
   }, [id]); // Re-run effect if ID changes
 
   const formatDuration = (seconds: number | null | undefined): string => {
@@ -83,6 +125,15 @@ const ConversationDetail: React.FC = () => {
     navigate(-1);
   };
 
+  // Helper function to format date (can be moved to utils if needed)
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (e) {
+      return "Invalid Date";
+    }
+  };
+
   if (isLoading) {
     return <div className="p-6 text-center">Loading conversation details...</div>;
   }
@@ -100,18 +151,9 @@ const ConversationDetail: React.FC = () => {
     return <div className="p-6 text-center">Conversation data is unavailable.</div>;
   }
 
-  // Helper function to format date (can be moved to utils if needed)
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch (e) {
-      return "Invalid Date";
-    }
-  };
-
   // Destructure data from the loaded conversation state
   // Use 'name' field for title
-  const { name: title, created_at, duration, audio_file } = conversation;
+  const { name: title, created_at, duration, audio_file, status_transcription, status_transcription_display, transcription_text } = conversation;
   const currentDuration = duration;
 
   // Format date using the helper function defined above
@@ -183,7 +225,11 @@ const ConversationDetail: React.FC = () => {
 
         <div className="flex-grow overflow-hidden">
           <TabsContent value="transcript" className="h-full">
-            <TranscriptionView />
+            <TranscriptionView 
+              transcription={transcription_text}
+              status={status_transcription}
+              statusDisplay={status_transcription_display}
+            />
           </TabsContent>
 
           <TabsContent value="analysis" className="h-full">

@@ -18,6 +18,10 @@ interface Conversation {
   status: string;
   audio_file: string | null; // URL to the audio file
   duration: number | null; // Duration in seconds from backend
+  // Add Phase 3 fields
+  status_transcription: string; // e.g., 'pending', 'processing', 'completed', 'failed'
+  status_transcription_display: string; // e.g., 'Pending', 'Processing', ...
+  transcription_text: string | null;
 }
 
 const Home = () => {
