@@ -1,0 +1,36 @@
+import os
+import dotenv
+
+from api.models import Conversation
+
+dotenv.load_dotenv()
+
+from groq import Groq
+
+client = Groq(
+    api_key=os.environ.get('GROQ_API_KEY'),
+)
+
+def interview_gaurd(text):
+    system_prompt=f'''
+    You will be passed a transcript of some audio. Based on the content, you will determine wether the audio recording is an interview for a job or posittion. Do not accept interviews that do not contain content typically expected from job interviews. You should be able to differentiate the different speakers based on their speech, and tell who is being interviewed. If you can do all of this, then the audio IS an interview. 
+    Kepp in mind that the transcript could be only a section of an interview. in this case, the transcript WOULD be an interview.
+    If the transcript is an interview you will send back 'True', and if the transcript is not an interview you will send back 'False'.
+    You must not send anything in the message except True or False.
+    Transcript: {text}
+    '''
+
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": system_prompt,
+            }
+        ],
+        model="llama-3.3-70b-versatile",
+    )
+
+    if "True" in chat_completion.choices[0].message.content:
+        return True
+    else:
+        return False
