@@ -1,4 +1,5 @@
 import time
+import json # Import the json library
 from .models import Conversation
 from background_task import background # Import the background decorator
 # Import the service
@@ -39,19 +40,21 @@ def process_transcription_task(conversation_id):
             'model': 'nova-2',        # Example model
             'language': 'en-US',     # Example language
             'punctuate': True,
-            'diarize': False,        # Example feature
+            'diarize': True,        # Enable diarization to get speaker labels
+            'utterances': True,     # Keep utterances enabled, might be useful
+            'smart_format': True,   # Keep smart format enabled
             # Add other relevant Deepgram parameters here
         }
 
         # Instantiate and call the service
         service = DeepgramTranscriptionService()
         print(f"[Background Task] Calling Deepgram service with options: {deepgram_options}")
-        # Call the correct method that returns the transcript string
-        transcription_result = service.get_full_transcript(audio_path, **deepgram_options)
+        # Call the method that now returns the structured transcript (list of dicts)
+        structured_transcription_result = service.get_full_transcript(audio_path, **deepgram_options)
         # ----------------------------------
 
-        # Update model with results
-        conversation.transcription_text = transcription_result # This should now be the text string
+        # Serialize the structured result to a JSON string before saving
+        conversation.transcription_text = json.dumps(structured_transcription_result)
         conversation.status_transcription = Conversation.STATUS_COMPLETED
         conversation.save(update_fields=['transcription_text', 'status_transcription', 'updated_at'])
         print(f"[Background Task] Status set to COMPLETED for Conversation ID: {conversation.id}")

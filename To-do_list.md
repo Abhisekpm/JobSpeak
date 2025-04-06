@@ -68,7 +68,7 @@
     - [ ] `analyze` action: Calls `request_analysis`, updates status/results, saves model.
 - [x] Update `ConversationSerializer` to include the new fields and statuses
 - [x] *(Optional)* Set up Celery, Redis/RabbitMQ for async tasks - *Implemented using django-background-tasks instead*
-- [x] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis - *Defined background task in `api/tasks.py`*
+- [x] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis - *Defined background task in `api/tasks.py`, now saves structured JSON with speaker segments*
 - [x] *(Optional)* Modify viewset actions to dispatch async tasks instead of direct calls - *Modified `perform_create` to schedule background task*
 
 ### Frontend (React)
@@ -76,7 +76,7 @@
 - [-] Add "Transcribe" button to `ConversationDetail.js` - *Removed due to automatic transcription workflow*
 - [ ] Add "Analyze" button to `ConversationDetail.js` (potentially enabled only after transcription is complete)
 - [-] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.) - *Handler for Transcribe button removed*
-- [x] Display `transcription_text` in `ConversationDetail.js` when available - *Handled via `TranscriptionView` component*
+- [x] Display `transcription_text` in `ConversationDetail.js` when available - *Handled via `TranscriptionView` component, now parses JSON and shows speaker labels*
 - [ ] Display formatted `analysis_results` in `ConversationDetail.js` when available
 - [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Handled via `TranscriptionView` component*
 - [x] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button) - *Polling implemented in `ConversationDetail`*
@@ -127,4 +127,11 @@
 - [ ] Create `requirements.txt` for Python dependencies
 - [ ] Verify `package.json` and `package-lock.json` for Node dependencies
 - [ ] Create `Dockerfile` for the Django backend application
-- [ ] Create `
+- [ ] Create `Dockerfile` for the React frontend application (consider multi-stage builds)
+- [ ] Create `.dockerignore` files for both frontend and backend
+- [ ] Create `docker-compose.yml` for easy local development setup (backend, frontend, database, redis if needed)
+- [ ] Manage environment variables (use `.env` files locally, system environment variables in production)
+- [ ] Configure production settings in Django (`SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`, database, static/media file storage like S3)
+- [ ] Set up static file serving for Django admin (if used) and collected static files
+- [ ] Choose and configure a WSGI server (e.g., Gunicorn)
+- [ ] Choose and configure a web server/proxy (e.g., Nginx)

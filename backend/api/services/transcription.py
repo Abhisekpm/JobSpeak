@@ -34,8 +34,12 @@ class DeepgramTranscriptionService:
             raise
     
     def clean_transcription(self, response):
-        words = []
+        segments = []
+        current_speaker = None
+        current_transcript_words = []
+
         try:
+            # Consolidate response handling logic if needed, assuming response_dict logic is okay
             if hasattr(response, 'to_dict'):
                 response_dict = response.to_dict()
             elif hasattr(response, '__dict__'):
@@ -43,30 +47,62 @@ class DeepgramTranscriptionService:
             else:
                 response_dict = response if type(response) is dict else json.loads(response)
 
-            if "results" in response_dict and "channels" in response_dict["results"]:
-                channels = response_dict["results"]["channels"]
-                for channel in channels:
-                    if "alternatives" in channel:
-                        alternatives = channel["alternatives"]
-                        for alternative in alternatives:
-                            if "words" in alternative:
-                                word_data = alternative["words"]
-                                for word in word_data:
-                                    if "punctuated_word" in word:
-                                        words.append(word["punctuated_word"])
-                            else:
-                                transcript = alternative.get("transcript", "")
-                                if transcript:
-                                    print(f"Found transcript: {transcript}")
+            # Check structure more robustly
+            words_list = response_dict.get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("words", [])
+
+            if not words_list:
+                 # Handle cases with paragraphs/utterances but no word-level detail or diarization
+                transcript = response_dict.get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript")
+                if transcript:
+                     return [{'speaker': 0, 'transcript': transcript}] # Assign a default speaker
+                 # If there's absolutely no transcript found
+                return []
+
+
+            for word_data in words_list:
+                speaker = word_data.get('speaker', 0) # Default to speaker 0 if not present
+                punctuated_word = word_data.get('punctuated_word', word_data.get('word', ''))
+
+                if current_speaker is None: # First word
+                    current_speaker = speaker
+                    current_transcript_words.append(punctuated_word)
+                elif speaker == current_speaker: # Same speaker
+                    current_transcript_words.append(punctuated_word)
+                else: # Speaker change
+                    # Finalize previous segment
+                    if current_transcript_words:
+                        segments.append({
+                            "speaker": current_speaker,
+                            "transcript": " ".join(current_transcript_words)
+                        })
+                    # Start new segment
+                    current_speaker = speaker
+                    current_transcript_words = [punctuated_word]
+
+            # Add the last segment after the loop
+            if current_transcript_words:
+                segments.append({
+                    "speaker": current_speaker,
+                    "transcript": " ".join(current_transcript_words)
+                })
+
         except Exception as e:
-            print(f"Error processing transcription: {e}")
+            print(f"Error processing transcription for speaker segmentation: {e}")
             print(f"Response type: {type(response).__name__}")
-            if hasattr(response, "to_dict"):
-                print("Response has to_dict method")
-            
-        return words
+            # Basic fallback: return the whole transcript as speaker 0 if segmentation fails
+            try:
+                transcript = response_dict.get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript")
+                if transcript:
+                    return [{'speaker': 0, 'transcript': transcript}]
+            except Exception as fallback_e:
+                 print(f"Error during fallback transcript extraction: {fallback_e}")
+                 return [] # Return empty if even fallback fails
+
+        return segments
     
     def get_full_transcript(self, audio_path, **kwargs):
         response = self.transcribe(audio_path, **kwargs)
-        words = self.clean_transcription(response)
-        return ' '.join(words) if words else ""
+        # clean_transcription now returns the structured list of segments
+        structured_transcript = self.clean_transcription(response) 
+        # Return the structured data directly
+        return structured_transcript
