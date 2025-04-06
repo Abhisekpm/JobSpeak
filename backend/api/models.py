@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+import os
 
 # Define a dynamic path for uploaded audio files
 def conversation_audio_path(instance, filename):
@@ -12,6 +14,14 @@ class Conversation(models.Model):
     STATUS_COMPLETED = 'completed'
     STATUS_FAILED = 'failed'
     TRANSCRIPTION_STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
+    # Add Status choices for Recap (similar structure)
+    STATUS_RECAP_CHOICES = [
         (STATUS_PENDING, 'Pending'),
         (STATUS_PROCESSING, 'Processing'),
         (STATUS_COMPLETED, 'Completed'),
@@ -38,5 +48,34 @@ class Conversation(models.Model):
     # analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis") # Removed for now
     # status_analysis = models.CharField(max_length=50, default='none') # Removed for now
 
+    # Recap fields (New)
+    status_recap = models.CharField(
+        max_length=20,
+        choices=STATUS_RECAP_CHOICES,
+        default=STATUS_PENDING
+    )
+    recap_text = models.TextField(null=True, blank=True) # To store the summarized text
+
     def __str__(self):
-        return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})" 
+        return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+    @property
+    def status_transcription_display(self):
+        return self.get_status_transcription_display()
+
+    # Add display property for recap status
+    @property
+    def status_recap_display(self):
+        return self.get_status_recap_display()
+
+    # Override save method to ensure directory exists (optional but good practice)
+    # def save(self, *args, **kwargs):
+    #     if self.pk is None: # Only on creation before file is saved
+    #         saved = super().save(*args, **kwargs)
+    #         # Now self.id is available, ensure directory exists *before* file save attempt
+    #         if self.audio_file:
+    #             dir_path = os.path.dirname(self.audio_file.path)
+    #             os.makedirs(dir_path, exist_ok=True)
+    #         return saved
+    #     else:
+    #         return super().save(*args, **kwargs) 

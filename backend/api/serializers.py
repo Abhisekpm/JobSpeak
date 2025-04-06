@@ -2,30 +2,68 @@ from rest_framework import serializers
 from .models import Conversation
 
 class ConversationSerializer(serializers.ModelSerializer):
-    # Add display fields for choice fields to show human-readable status
+    # Make audio_file read-only in list/detail views, handle upload separately
+    # Use SerializerMethodField to construct the full URL for audio_file
+    audio_file_url = serializers.SerializerMethodField()
     status_transcription_display = serializers.CharField(source='get_status_transcription_display', read_only=True)
-    
+    status_recap_display = serializers.CharField(source='get_status_recap_display', read_only=True)
+
     class Meta:
         model = Conversation
-        # Include all fields including new transcription fields
-        fields = (
+        fields = [
             'id',
             'name',
             'created_at',
             'updated_at',
             'status',
             'audio_file',
+            'audio_file_url',
             'duration',
-            'status_transcription',
-            'status_transcription_display', # Include the display field
-            'transcription_text',
-        )
-        # Add new fields to read_only_fields
-        read_only_fields = (
-            'id', 
-            'created_at', 
-            'updated_at',
             'status_transcription',
             'status_transcription_display',
             'transcription_text',
-        ) 
+            'status_recap',
+            'status_recap_display',
+            'recap_text',
+        ]
+        read_only_fields = [
+            'id', 
+            'created_at', 
+            'updated_at', 
+            'audio_file_url', 
+            'duration', 
+            'status_transcription', 
+            'status_transcription_display',
+            'transcription_text',
+            'status_recap',
+            'status_recap_display',
+            'recap_text',
+        ]
+
+    def get_audio_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.audio_file and request:
+            # Use build_absolute_uri to get the full URL including domain
+            return request.build_absolute_uri(obj.audio_file.url)
+        return None
+
+class ConversationCreateSerializer(serializers.ModelSerializer):
+    # Allow writing to audio_file during creation/upload
+    audio_file = serializers.FileField(write_only=True, required=True)
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True) # Allow name during upload
+
+    class Meta:
+        model = Conversation
+        fields = ['id', 'name', 'audio_file'] # Only accept name and audio_file on create
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        # Pop name to set it explicitly, handle default if not provided
+        name = validated_data.pop('name', None)
+        if not name:
+             # Create a default name if none provided
+             existing_count = Conversation.objects.count()
+             name = f"Conversation {existing_count + 1}"
+        
+        conversation = Conversation.objects.create(name=name, **validated_data)
+        return conversation 

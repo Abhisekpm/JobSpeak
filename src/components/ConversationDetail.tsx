@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Card } from "./ui/card";
 import TranscriptionView from "./TranscriptionView";
 import AnalysisPanel from "./AnalysisPanel";
+import RecapView from "./RecapView"; // Import the new RecapView component
 import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
@@ -14,13 +15,21 @@ interface Conversation {
   name: string;
   created_at: string;
   updated_at: string;
-  status: string;
+  // status: string; // Remove if unused
   audio_file: string | null; // URL to the audio file
   duration: number | null; // Duration in seconds from backend
-  // Add Phase 3 fields
+  // Transcription fields
   status_transcription: string;
   status_transcription_display: string;
   transcription_text: string | null;
+  // Recap fields
+  status_recap: string;
+  status_recap_display: string;
+  recap_text: string | null;
+  // Analysis fields (if/when added)
+  // status_analysis: string;
+  // status_analysis_display: string;
+  // analysis_results: string | null;
 }
 
 const ConversationDetail: React.FC = () => {
@@ -66,23 +75,23 @@ const ConversationDetail: React.FC = () => {
               console.log("Setting initial audio duration from backend:", fetchedConversation.duration);
               setAudioDuration(fetchedConversation.duration);
             } else {
-              // Reset if backend provides null or invalid duration
               setAudioDuration(0);
             }
-
-            // Don't set audio source here anymore
             
-            // Check if transcription is still processing
-            if (fetchedConversation.status_transcription === 'processing' || fetchedConversation.status_transcription === 'pending') {
+            // Check if transcription OR recap is still processing
+            const isTranscriptionProcessing = fetchedConversation.status_transcription === 'processing' || fetchedConversation.status_transcription === 'pending';
+            const isRecapProcessing = fetchedConversation.status_recap === 'processing' || fetchedConversation.status_recap === 'pending';
+
+            if (isTranscriptionProcessing || isRecapProcessing) {
                 // If processing, schedule a refetch (polling)
-                if (!intervalId) { // Start polling only once
-                    console.log("Transcription processing, starting poll...");
+                if (!intervalId) { // Start polling only once if needed
+                    console.log(`Polling started (Transcription: ${isTranscriptionProcessing}, Recap: ${isRecapProcessing})`);
                     intervalId = setInterval(fetchConversationDetail, 5000); // Poll every 5 seconds
                 }
             } else {
-                // If completed or failed, stop polling
+                // If both completed or failed, stop polling
                 if (intervalId) {
-                    console.log("Transcription finished, stopping poll.");
+                    console.log("Transcription and Recap finished, stopping poll.");
                     clearInterval(intervalId);
                     intervalId = null;
                 }
@@ -361,6 +370,7 @@ const ConversationDetail: React.FC = () => {
       <Tabs defaultValue="transcript" className="flex-grow flex flex-col">
         <TabsList className="mb-4 flex-shrink-0">
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
+          <TabsTrigger value="recap">Recap</TabsTrigger> {/* Add Recap Tab Trigger */}
           <TabsTrigger value="analysis">Analysis</TabsTrigger>
         </TabsList>
 
@@ -371,6 +381,15 @@ const ConversationDetail: React.FC = () => {
               status={conversation?.status_transcription}
               statusDisplay={conversation?.status_transcription_display}
             />
+          </TabsContent>
+
+          {/* Add Recap Tab Content */}
+          <TabsContent value="recap" className="h-full">
+            <RecapView 
+               recap={conversation?.recap_text}
+               status={conversation?.status_recap}
+               statusDisplay={conversation?.status_recap_display}
+             />
           </TabsContent>
 
           <TabsContent value="analysis" className="h-full">
