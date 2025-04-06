@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import apiClient from "../lib/apiClient"; // Import apiClient
 import { Button } from "./ui/button";
@@ -32,11 +32,21 @@ const ConversationDetail: React.FC = () => {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [isAudioReady, setIsAudioReady] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
-  // Effect to load data from API when component mounts or ID changes
+  // --- Fetch Data ---
   useEffect(() => {
-    let isMounted = true; // Prevent state updates on unmounted component
-    let intervalId: NodeJS.Timeout | null = null; // For polling
+    let isMounted = true; 
+    let intervalId: NodeJS.Timeout | null = null; 
+    
+    // Reset state (keep isPlaying, currentTime, audioDuration reset here)
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setAudioDuration(0);
+    // isAudioReady will be handled by the other useEffect now
 
     const fetchConversationDetail = async () => {
       if (!isMounted) return; // Don't fetch if component unmounted
@@ -47,9 +57,23 @@ const ConversationDetail: React.FC = () => {
       try {
         const response = await apiClient.get<Conversation>(`/conversations/${id}/`);
         if (isMounted) {
-            setConversation(response.data);
+            const fetchedConversation = response.data;
+            setConversation(fetchedConversation);
+            console.log("Fetched Conversation Data:", fetchedConversation);
+
+            // Re-initialize audioDuration state with backend value
+            if (fetchedConversation.duration !== null && Number.isFinite(fetchedConversation.duration)) {
+              console.log("Setting initial audio duration from backend:", fetchedConversation.duration);
+              setAudioDuration(fetchedConversation.duration);
+            } else {
+              // Reset if backend provides null or invalid duration
+              setAudioDuration(0);
+            }
+
+            // Don't set audio source here anymore
+            
             // Check if transcription is still processing
-            if (response.data.status_transcription === 'processing' || response.data.status_transcription === 'pending') {
+            if (fetchedConversation.status_transcription === 'processing' || fetchedConversation.status_transcription === 'pending') {
                 // If processing, schedule a refetch (polling)
                 if (!intervalId) { // Start polling only once
                     console.log("Transcription processing, starting poll...");
@@ -103,22 +127,127 @@ const ConversationDetail: React.FC = () => {
     };
   }, [id]); // Re-run effect if ID changes
 
+  // --- Audio Event Listeners & Source Setting ---
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+        console.log("Audio ref not available yet.");
+        return; // Exit if ref is not ready
+    }
+
+    // --- Set or Remove Audio Source --- 
+    let audioSrc: string | null = null;
+    if (conversation?.audio_file) {
+        // Use the URL directly from the backend response
+        audioSrc = conversation.audio_file;
+    }
+
+    if (audioSrc) {
+        if (audio.src !== audioSrc) {
+            console.log(`Setting audio source to: ${audioSrc}`);
+            setIsAudioReady(false);
+            audio.src = audioSrc;
+            audio.load();
+            console.log("Called audio.load()");
+        }
+    } else {
+        // Remove source if no URL and src currently exists
+        if (audio.src) {
+            console.log("Removing audio source.");
+            audio.removeAttribute('src');
+            audio.load(); // Important to reflect change
+            setIsAudioReady(false); // Reset readiness
+             // Reset playback state
+            setIsPlaying(false);
+            setCurrentTime(0);
+            setAudioDuration(0);
+        }
+    }
+    
+    // --- Add Event Listeners --- 
+    const handleTimeUpdate = () => { setCurrentTime(audio.currentTime); };
+    const handleLoadedMetadata = () => { 
+        console.log("Audio metadata loaded. Browser duration:", audio.duration);
+    };
+    const handleEnded = () => { setIsPlaying(false); setCurrentTime(0); };
+    const handleCanPlayThrough = () => { console.log("Audio can play through."); setIsAudioReady(true); };
+    // Add error handling listener
+    const handleError = (e: Event) => { 
+      console.error("Audio Error:", e, audio.error);
+      setError("An error occurred trying to load or play the audio."); // Set user-facing error
+      setIsAudioReady(false); // Set to not ready on error
+    }
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('canplaythrough', handleCanPlayThrough);
+    audio.addEventListener('error', handleError); // Add error listener
+
+    // Cleanup listeners
+    return () => {
+      console.log("Cleaning up audio listeners.");
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('canplaythrough', handleCanPlayThrough);
+      audio.removeEventListener('error', handleError); // Remove error listener
+    };
+    // Depend on conversation.audio_file to re-run when URL changes
+  }, [conversation?.audio_file]); 
+
   const formatDuration = (seconds: number | null | undefined): string => {
-    if (seconds === null || seconds === undefined || isNaN(seconds) || seconds < 0) return "--:--";
+    if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
+        return "--:--";
+    }
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
   const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
-    // TODO: Implement actual audio playback control using conversation.audio_file URL
-    if (conversation?.audio_file) {
-        console.log("Audio URL:", conversation.audio_file);
-        // Add logic here to load and control an <audio> element
+    const audio = audioRef.current;
+    if (!audio || !audio.src) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
     } else {
-        console.log("No audio file URL available.");
+      // Check our readiness state first
+      if (isAudioReady) {
+           audio.play()
+             .then(() => { setIsPlaying(true); })
+             .catch(error => { console.error("Error playing audio:", error); setIsPlaying(false); });
+      } else {
+          console.warn("Audio not ready according to 'canplaythrough' event yet.");
+          // Maybe trigger load again if user clicks before ready?
+          // if (audio.networkState === audio.NETWORK_IDLE || audio.networkState === audio.NETWORK_NO_SOURCE) {
+          //    audio.load(); 
+          // }
+      }
     }
+  };
+
+  // --- Seek Functionality (Click on Progress Bar) ---
+  const handleSeek = (event: React.MouseEvent<HTMLDivElement>) => {
+      const audio = audioRef.current;
+      const progressBar = progressBarRef.current;
+      // Use audioDuration state which is updated from the audio element
+      if (!audio || !progressBar || audioDuration <= 0) return; 
+
+      const rect = progressBar.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const width = rect.width;
+      const seekFraction = Math.max(0, Math.min(1, clickX / width)); // Clamp between 0 and 1
+      const seekTime = seekFraction * audioDuration;
+
+      // Check if audio is ready to seek
+      if (audio.readyState >= 1) { // HAVE_METADATA or more
+        audio.currentTime = seekTime;
+        setCurrentTime(seekTime); // Update state immediately for smoother UI
+      } else {
+         console.warn("Cannot seek: Audio metadata not loaded yet.");
+      }
   };
 
   const handleBack = () => {
@@ -153,14 +282,22 @@ const ConversationDetail: React.FC = () => {
 
   // Destructure data from the loaded conversation state
   // Use 'name' field for title
-  const { name: title, created_at, duration, audio_file, status_transcription, status_transcription_display, transcription_text } = conversation;
-  const currentDuration = duration;
+  const { name: title, created_at, audio_file } = conversation;
+  const currentDuration = audioDuration;
 
   // Format date using the helper function defined above
   const date = formatDate(created_at);
 
+  // Calculate progress percentage safely
+  const progressPercent = (Number.isFinite(currentDuration) && currentDuration > 0) 
+                          ? (currentTime / currentDuration) * 100 
+                          : 0;
+
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 p-4 md:p-6">
+      {/* Change preload to "auto" */}
+      <audio ref={audioRef} preload="auto" />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-lg shadow-sm">
         <div className="flex items-center gap-2">
@@ -197,15 +334,19 @@ const ConversationDetail: React.FC = () => {
             className="h-10 w-10 rounded-full"
             onClick={togglePlayback}
             aria-label={isPlaying ? "Pause playback" : "Start playback"}
-            disabled={!audio_file} // Disable play if no audio file URL
+            disabled={!audio_file || !isAudioReady}
           >
             {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
           </Button>
           <div className="flex-grow">
-            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              ref={progressBarRef} 
+              onClick={handleSeek}
+              className="h-2 bg-gray-200 rounded-full overflow-hidden cursor-pointer group"
+            >
               <div
-                className="h-full bg-primary transition-all duration-150"
-                style={{ width: `${currentDuration && currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0}%` }}
+                className="h-full bg-primary transition-all duration-100 pointer-events-none"
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
             <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -226,9 +367,9 @@ const ConversationDetail: React.FC = () => {
         <div className="flex-grow overflow-hidden">
           <TabsContent value="transcript" className="h-full">
             <TranscriptionView 
-              transcription={transcription_text}
-              status={status_transcription}
-              statusDisplay={status_transcription_display}
+              transcription={conversation?.transcription_text}
+              status={conversation?.status_transcription}
+              statusDisplay={conversation?.status_transcription_display}
             />
           </TabsContent>
 
