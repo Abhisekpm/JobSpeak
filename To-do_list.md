@@ -54,14 +54,14 @@
 - [x] Update `apiClient.js` or create a function to upload audio (Blob or File) - *Upload logic implemented in `handleSaveRecording` using apiClient*
 - [x] Use `FormData` to prepare the audio data for the POST request - *Done in `handleSaveRecording`*
 - [x] Trigger the upload function from `AudioRecorder.js` (on stop) and `AudioUploader.js` (on file select/submit) - *Triggered via Save button in `RecordingModal`*
-- [x] Add HTML5 `<audio>` element to play back audio (using the URL from the API) - *Element/UI present in `ConversationDetail.tsx`, playback logic basic*
+- [x] Add HTML5 `<audio>` element to play back audio (using the URL from the API) - *Implemented and debugged in `ConversationDetail.tsx` with playback controls, progress, and seeking*
 
 ## Phase 3: Transcription & Analysis Integration
 
 ### Backend (Django)
 - [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField) - *Added transcription fields*
 - [x] Run migrations for new model fields
-- [x] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay) - *Created `trigger_transcription` logic in `api/tasks.py`*
+- [x] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay) - *Actual service logic defined; trigger logic moved to `api/tasks.py`*
 - [ ] Create `api/services/analysis.py` with a placeholder function `request_analysis(transcription_text)` that returns dummy JSON/dict (and maybe simulates delay)
 - [ ] Add custom actions (`@action(detail=True, methods=['post'])`) to `ConversationViewSet`:
     - [-] `transcribe` action: Calls `request_transcription`, updates status/results, saves model. - *Removed button, using auto-trigger*
@@ -76,28 +76,28 @@
 - [-] Add "Transcribe" button to `ConversationDetail.js` - *Removed due to automatic transcription workflow*
 - [ ] Add "Analyze" button to `ConversationDetail.js` (potentially enabled only after transcription is complete)
 - [-] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.) - *Handler for Transcribe button removed*
-- [x] Display `transcription_text` in `ConversationDetail.js` when available - *Passed prop to `TranscriptionView`*
+- [x] Display `transcription_text` in `ConversationDetail.js` when available - *Handled via `TranscriptionView` component*
 - [ ] Display formatted `analysis_results` in `ConversationDetail.js` when available
-- [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Passed status props to `TranscriptionView`*
+- [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Handled via `TranscriptionView` component*
 - [x] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button) - *Polling implemented in `ConversationDetail`*
 
 ## Phase 4: Dashboard & UI/UX Refinement
 
 ### Frontend (React)
-- [ ] Create `Dashboard.js` component
-- [ ] Use `useEffect` in `Dashboard.js` to fetch the list of conversations (`/api/conversations/`) from the backend on component mount
-- [ ] Render the list of conversations in `Dashboard.js` (e.g., using a table or list component from a UI library)
-    - [ ] Display key info: Name, Date, Status (Transcription/Analysis)
-- [ ] Set up routing for individual conversations (e.g., `/conversations/:id`) pointing to `ConversationDetail.js`
-- [ ] Add navigation links (`<Link>`) from each item in the dashboard list to its detail view
-- [ ] Implement the "+" icon/button (e.g., Floating Action Button - FAB)
-- [ ] Create a Modal or Menu component triggered by the "+" button
-- [ ] Add options ("Record New Conversation", "Upload Audio File") to the Modal/Menu
-- [ ] Connect Modal/Menu options to initiate the respective `AudioRecorder` or `AudioUploader` flow/component display
-- [ ] Refine overall CSS and styling for consistency and usability
-- [ ] Implement responsive design using media queries or UI library grid/layout components
+- [x] Create `Dashboard.js` component - *Implemented as `Home.tsx`*
+- [x] Use `useEffect` in `Dashboard.js` to fetch the list of conversations (`/api/conversations/`) from the backend on component mount - *Fetching from API*
+- [x] Render the list of conversations in `Dashboard.js` (e.g., using a table or list component from a UI library)
+    - [x] Display key info: Name, Date, Status (Transcription/Analysis) - *Displaying Title, Date, Duration, and Transcription Preview/Status*
+- [x] Set up routing for individual conversations (e.g., `/conversations/:id`) pointing to `ConversationDetail.js`
+- [x] Add navigation links (`<Link>`) from each item in the dashboard list to its detail view - *Using `onClick` + `navigate`*
+- [x] Implement the "+" icon/button (e.g., Floating Action Button - FAB)
+- [x] Create a Modal or Menu component triggered by the "+" button - *Implemented `RecordingModal.tsx`*
+- [x] Add options ("Record New Conversation", "Upload Audio File") to the Modal/Menu
+- [x] Connect Modal/Menu options to initiate the respective `AudioRecorder` or `AudioUploader` flow/component display
+- [x] Refine overall CSS and styling for consistency and usability - *Adjusted grid spacing*
+- [x] Implement responsive design using media queries or UI library grid/layout components - *Basic responsiveness via Tailwind classes*
 - [ ] Test responsiveness on different screen sizes (desktop, tablet, mobile)
-- [ ] Review semantic HTML usage (`<nav>`, `<main>`, `<article>`, `<button>`, etc.)
+- [x] Review semantic HTML usage (`<nav>`, `<main>`, `<article>`, `<button>`, etc.) - *Basic usage seems okay*
 - [ ] Check basic accessibility (keyboard navigation, focus indicators, button labels)
 
 ## Phase 5: Testing, Polish & Deployment Prep

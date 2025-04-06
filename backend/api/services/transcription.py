@@ -5,40 +5,6 @@ import dotenv
 import os
 import json
 
-def trigger_transcription(conversation_instance: Conversation):
-    """
-    Placeholder function to simulate triggering and completing transcription.
-    In a real scenario, this would likely call an external API or enqueue a task.
-    """
-    print(f"[Transcription Service] Triggered for Conversation ID: {conversation_instance.id}")
-    
-    # Check if audio file exists
-    if not conversation_instance.audio_file:
-        print(f"[Transcription Service] No audio file found for Conversation ID: {conversation_instance.id}. Aborting.")
-        conversation_instance.status_transcription = Conversation.STATUS_FAILED
-        conversation_instance.save(update_fields=['status_transcription', 'updated_at'])
-        return
-
-    try:
-        # 1. Update status to Processing
-        conversation_instance.status_transcription = Conversation.STATUS_PROCESSING
-        conversation_instance.save(update_fields=['status_transcription', 'updated_at'])
-        print(f"[Transcription Service] Status set to PROCESSING for Conversation ID: {conversation_instance.id}")
-
-        """ TRANSCRIPTION HERE"""
-        transcription_service = DeepgramTranscriptionService()
-        transcription = transcription_service.get_full_transcript()
-
-        conversation_instance.transcription_text = transcription
-        conversation_instance.status_transcription = Conversation.STATUS_COMPLETED
-        conversation_instance.save(update_fields=['transcription_text', 'status_transcription', 'updated_at'])
-        print(f"[Transcription Service] Status set to COMPLETED for Conversation ID: {conversation_instance.id}")
-
-    except Exception as e:
-        print(f"[Transcription Service] Error processing Conversation ID {conversation_instance.id}: {e}")
-        conversation_instance.status_transcription = Conversation.STATUS_FAILED
-        conversation_instance.save(update_fields=['status_transcription', 'updated_at'])
-
 class DeepgramTranscriptionService:
     def __init__(self, api_key=None):
         dotenv.load_dotenv()

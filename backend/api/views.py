@@ -6,9 +6,6 @@ from .serializers import ConversationSerializer
 # Import Django's default storage
 from django.core.files.storage import default_storage
 
-# Import the transcription trigger function from the correct path
-from .services.transcription import trigger_transcription
-
 # Import the Celery task
 from .tasks import process_transcription_task
 

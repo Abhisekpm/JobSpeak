@@ -165,6 +165,25 @@ const Home = () => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
+  // Helper function to create transcription preview
+  const createTranscriptionPreview = (text: string | null | undefined, status: string | undefined): string => {
+    if (status === 'processing' || status === 'pending') {
+      return "Transcription processing...";
+    }
+    if (!text || text.trim() === '') {
+      if (status === 'failed') {
+        return "Transcription failed.";
+      } else {
+        return "No transcription available."; // Or maybe just empty string?
+      }
+    }
+    const maxLength = 150; // Max characters for preview
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength) + "...";
+  };
+
   // --- Render Logic --- 
 
   return (
@@ -215,13 +234,13 @@ const Home = () => {
                   key={conv.id}
                   id={String(conv.id)}
                   title={conv.name}
-                  date={formatDate(conv.created_at)} // Format created_at for display
-                  duration={formatDuration(conv.duration)} // Use backend duration if available
+                  date={formatDate(conv.created_at)}
+                  duration={formatDuration(conv.duration)}
+                  // Generate and pass the preview
+                  transcriptionPreview={createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
                   onClick={() => handleViewDetails(conv.id)}
                   onDelete={() => handleDeleteConversation(conv.id)}
                   onTitleChange={handleTitleChange}
-                  // Add transcriptionPreview later if needed
-                  // transcriptionPreview={conv.transcription_preview || ""}
                 />
               ))}
             </div>
