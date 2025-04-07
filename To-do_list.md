@@ -59,27 +59,31 @@
 ## Phase 3: Transcription & Analysis Integration
 
 ### Backend (Django)
-- [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField) - *Added transcription fields*
+- [x] Add fields to `Conversation` model: `transcription_text` (TextField), `analysis_results` (JSONField/TextField), `status_transcription` (CharField), `status_analysis` (CharField) - *Added transcription fields, recap_text, and status_recap*
 - [x] Run migrations for new model fields
 - [x] Create `api/services/transcription.py` with a placeholder function `request_transcription(conversation_id)` that returns dummy text (and maybe simulates delay) - *Actual service logic defined; trigger logic moved to `api/tasks.py`*
+- [x] Create `api/services/recap.py` with function `recap_interview(transcript_text)` using Groq API.
 - [ ] Create `api/services/analysis.py` with a placeholder function `request_analysis(transcription_text)` that returns dummy JSON/dict (and maybe simulates delay)
 - [ ] Add custom actions (`@action(detail=True, methods=['post'])`) to `ConversationViewSet`:
     - [-] `transcribe` action: Calls `request_transcription`, updates status/results, saves model. - *Removed button, using auto-trigger*
+    - [-] `recap` action: Calls `recap_interview`, updates status/results, saves model. - *Implemented via background task trigger*
     - [ ] `analyze` action: Calls `request_analysis`, updates status/results, saves model.
-- [x] Update `ConversationSerializer` to include the new fields and statuses
+- [x] Update `ConversationSerializer` to include the new fields and statuses - *Added transcription and recap fields/statuses*
 - [x] *(Optional)* Set up Celery, Redis/RabbitMQ for async tasks - *Implemented using django-background-tasks instead*
-- [x] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis - *Defined background task in `api/tasks.py`, now saves structured JSON with speaker segments*
-- [x] *(Optional)* Modify viewset actions to dispatch async tasks instead of direct calls - *Modified `perform_create` to schedule background task*
+- [x] *(Optional)* Define Celery tasks in `api/tasks.py` for transcription/analysis - *Defined background task `process_transcription_task` (saves JSON w/ speakers) and `process_recap_task` (calls Groq service)*
+- [x] *(Optional)* Modify viewset actions to dispatch async tasks instead of direct calls - *Modified `perform_create` to schedule background task; transcription task triggers recap task*
 
 ### Frontend (React)
 - [x] Create `ConversationDetail.js` component (if not already started)
 - [-] Add "Transcribe" button to `ConversationDetail.js` - *Removed due to automatic transcription workflow*
+- [-] Add "Recap" button to `ConversationDetail.js` - *Removed due to automatic recap workflow*
 - [ ] Add "Analyze" button to `ConversationDetail.js` (potentially enabled only after transcription is complete)
-- [-] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.) - *Handler for Transcribe button removed*
+- [-] Implement `onClick` handlers for buttons to call the corresponding backend API endpoints (`/api/conversations/<id>/transcribe/`, etc.) - *Handlers removed*
 - [x] Display `transcription_text` in `ConversationDetail.js` when available - *Handled via `TranscriptionView` component, now parses JSON and shows speaker labels*
+- [x] Display `recap_text` in `ConversationDetail.js` when available - *Handled via `RecapView` component*
 - [ ] Display formatted `analysis_results` in `ConversationDetail.js` when available
-- [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Handled via `TranscriptionView` component*
-- [x] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button) - *Polling implemented in `ConversationDetail`*
+- [x] Display status indicators (e.g., "Idle", "Processing", "Completed") for transcription and analysis based on API data - *Handled via `TranscriptionView` and `RecapView` components*
+- [x] Implement logic to fetch/refresh conversation data to show updated statuses and results (e.g., polling, manual refresh button) - *Polling implemented in `ConversationDetail` for transcription and recap*
 
 ## Phase 4: Dashboard & UI/UX Refinement
 
@@ -88,6 +92,12 @@
 - [x] Use `useEffect` in `Dashboard.js` to fetch the list of conversations (`/api/conversations/`) from the backend on component mount - *Fetching from API*
 - [x] Render the list of conversations in `Dashboard.js` (e.g., using a table or list component from a UI library)
     - [x] Display key info: Name, Date, Status (Transcription/Analysis) - *Displaying Title, Date, Duration, and Transcription Preview/Status*
+- [x] Implement Search/Filter component (`SearchFilter.tsx`) - *Component exists*
+    - [x] Add Search Input to `Home.tsx`
+    - [x] Implement client-side search filtering (name, transcription text)
+    - [x] Add Filter Dropdown (Date) to `Home.tsx`
+    - [x] Implement client-side date filtering
+    - [-] Implement Sort Dropdown - *Removed*
 - [x] Set up routing for individual conversations (e.g., `/conversations/:id`) pointing to `ConversationDetail.js`
 - [x] Add navigation links (`<Link>`) from each item in the dashboard list to its detail view - *Using `onClick` + `navigate`*
 - [x] Implement the "+" icon/button (e.g., Floating Action Button - FAB)

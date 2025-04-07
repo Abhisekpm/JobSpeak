@@ -6,6 +6,7 @@ import Header from "./Header";
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
 import RecordingModal from "./RecordingModal";
+import SearchFilter from "./SearchFilter"; // Import the SearchFilter component
 import { Button } from "./ui/button"; // Added for error display
 import { toast } from "./ui/use-toast"; // Assuming use-toast is setup (from shadcn/ui)
 
@@ -24,6 +25,12 @@ interface Conversation {
   transcription_text: string | null;
 }
 
+// Define filter options structure (now matches SearchFilter)
+interface FilterOptions {
+  date?: string[]; // Array like ["Today", "This Month"]
+  // duration removed
+}
+
 const Home = () => {
   const navigate = useNavigate();
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
@@ -31,6 +38,8 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(true); // For initial load
   const [isSaving, setIsSaving] = useState(false); // For save operation
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>(""); // State for search term
+  const [activeFilters, setActiveFilters] = useState<FilterOptions>({}); // State for active filters
 
   // Effect to fetch conversations from the API on component mount
   useEffect(() => {
@@ -51,6 +60,18 @@ const Home = () => {
   }, []);
 
   // --- Handlers --- 
+  
+  // Handler for search input changes
+  const handleSearchChange = (term: string) => {
+    setSearchTerm(term);
+  };
+
+  // Handler for filter changes from SearchFilter component
+  const handleFilterChange = (newFilters: FilterOptions) => {
+    setActiveFilters(newFilters);
+    console.log("Active Filters Updated:", newFilters); // Log for debugging
+  };
+
   const handleSaveRecording = async (data: { title: string; audio: Blob; duration: number }) => {
     setIsSaving(true);
     // Create FormData
@@ -184,12 +205,80 @@ const Home = () => {
     return text.substring(0, maxLength) + "...";
   };
 
+  // --- Filtering Logic --- 
+  const filteredConversations = conversations.filter(conv => {
+    // 1. Search Term Filter (Name or Transcription)
+    const searchMatch = searchTerm === '' || 
+                         conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (conv.transcription_text && conv.transcription_text.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!searchMatch) return false;
+
+    // 2. Date Filter (using checkboxes)
+    if (activeFilters.date && activeFilters.date.length > 0) {
+      const createdAt = new Date(conv.created_at);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+
+      let dateMatch = false;
+      for (const dateFilter of activeFilters.date) {
+        let startDate: Date | null = null;
+        let endDate: Date | null = null; // Use end date for ranges like This Week
+
+        switch (dateFilter) {
+          case "Today":
+            startDate = new Date(today);
+            endDate = new Date(today); 
+            endDate.setHours(23, 59, 59, 999); // End of today
+            break;
+          case "This Week":
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+             // Or Monday: startDate.setDate(today.getDate() - (today.getDay() + 6) % 7);
+            endDate = new Date(startDate); 
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999); // End of week
+            break;
+          case "This Month":
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
+            endDate.setHours(23, 59, 59, 999);
+            break;
+          case "This Year":
+            startDate = new Date(today.getFullYear(), 0, 1);
+            endDate = new Date(today.getFullYear(), 11, 31);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+        }
+        
+        // Check if conversation date falls within the calculated range
+        if (startDate && endDate && 
+            !isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && 
+            createdAt >= startDate && createdAt <= endDate) {
+          dateMatch = true;
+          break; // Found a match for one of the selected date filters
+        }
+      }
+      if (!dateMatch) return false; // No selected date ranges matched
+    }
+
+    // 3. Duration Filter (Removed)
+    // if (activeFilters.duration && activeFilters.duration.length > 0) { ... }
+
+    // If all filters pass
+    return true;
+  });
+
   // --- Render Logic --- 
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Header userName="Abhishek Suman" />
       <main className="flex-1 p-6 overflow-y-auto">
+        <div className="max-w-4xl mx-auto mb-6">
+           <SearchFilter onSearchChange={handleSearchChange} onFilter={handleFilterChange} />
+        </div>
+        
         <div className="max-w-4xl mx-auto">
           <h2 className="text-2xl font-semibold mb-4">Recent Conversations</h2>
 
@@ -216,7 +305,12 @@ const Home = () => {
             </div>
           )}
 
-          {/* Empty State */} 
+          {/* Empty State (adjusted for filtering) */} 
+          {!isLoading && !error && conversations.length > 0 && filteredConversations.length === 0 && (
+            <div className="text-center py-12 border border-dashed rounded-lg">
+              <p className="text-gray-500">No conversations match your search "{searchTerm}".</p>
+            </div>
+          )}
           {!isLoading && !error && conversations.length === 0 && (
             <div className="text-center py-12 border border-dashed rounded-lg">
               <p className="text-gray-500">No conversations yet.</p>
@@ -226,10 +320,10 @@ const Home = () => {
             </div>
           )}
 
-          {/* Data Display */} 
-          {!isLoading && !error && conversations.length > 0 && (
+          {/* Data Display (uses filteredConversations) */} 
+          {!isLoading && !error && filteredConversations.length > 0 && (
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {conversations.map((conv) => (
+              {filteredConversations.map((conv) => (
                 <ConversationCard
                   key={conv.id}
                   id={String(conv.id)}
