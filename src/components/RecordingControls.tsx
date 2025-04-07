@@ -57,9 +57,9 @@ const RecordingControls = ({
             <TooltipTrigger asChild>
               <Button
                 onClick={handleRecord}
-                variant="outline"
+                variant="default"
                 size="icon"
-                className="border-2 border-red-500 text-red-500 hover:bg-red-50 rounded-full flex items-center justify-center"
+                className="bg-black text-white hover:bg-gray-800 rounded-full flex items-center justify-center"
               >
                 <Mic className="h-6 w-6" />
               </Button>
@@ -73,9 +73,9 @@ const RecordingControls = ({
             <TooltipTrigger asChild>
               <Button
                 onClick={handlePause}
-                variant="outline"
+                variant="default"
                 size="icon"
-                className="border-2 border-amber-500 text-amber-500 hover:bg-amber-50 rounded-full flex items-center justify-center"
+                className="bg-black text-white hover:bg-gray-800 rounded-full flex items-center justify-center"
               >
                 <Pause className="h-6 w-6" />
               </Button>
@@ -89,9 +89,9 @@ const RecordingControls = ({
             <TooltipTrigger asChild>
               <Button
                 onClick={handleRecord}
-                variant="outline"
+                variant="default"
                 size="icon"
-                className="border-2 border-green-500 text-green-500 hover:bg-green-50 rounded-full flex items-center justify-center"
+                className="bg-black text-white hover:bg-gray-800 rounded-full flex items-center justify-center"
               >
                 <Mic className="h-6 w-6" />
               </Button>
@@ -106,9 +106,9 @@ const RecordingControls = ({
           <TooltipTrigger asChild>
             <Button
               onClick={handleStop}
-              variant="outline"
+              variant="default"
               size="icon"
-              className={`border-2 border-red-500 text-red-500 hover:bg-red-50 rounded-full flex items-center justify-center ${recordingState === "idle" ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`bg-black text-white hover:bg-gray-800 rounded-full flex items-center justify-center ${recordingState === "idle" ? "opacity-50 cursor-not-allowed" : ""}`}
               disabled={recordingState === "idle"}
             >
               <Square className="h-5 w-5" />

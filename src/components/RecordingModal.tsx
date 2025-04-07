@@ -11,7 +11,6 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { X } from "lucide-react";
-import WaveformVisualizer from "./WaveformVisualizer";
 import RecordingControls from "./RecordingControls";
 
 interface RecordingModalProps {
@@ -34,26 +33,11 @@ const RecordingModal = ({
   const [duration, setDuration] = useState<number>(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [audioData, setAudioData] = useState<number[]>([]);
 
   const timerRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Mock audio data for visualization
-  useEffect(() => {
-    if (isRecording && !isPaused) {
-      const interval = setInterval(() => {
-        setAudioData(
-          Array(50)
-            .fill(0)
-            .map(() => Math.random() * 100),
-        );
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [isRecording, isPaused]);
 
   // Timer for recording duration
   useEffect(() => {
@@ -61,11 +45,6 @@ const RecordingModal = ({
     if (isRecording && !isPaused) {
       interval = setInterval(() => {
         setDuration((prevDuration) => prevDuration + 1);
-        // Simulate audio data for waveform during recording
-        setAudioData((prevData) => [
-          ...prevData.slice(-100), // Keep last 100 points
-          Math.random() * 100,
-        ]);
       }, 1000);
     } else if (interval) {
       clearInterval(interval);
@@ -168,11 +147,6 @@ const RecordingModal = ({
       setUploadedFile(file);
       // In a real implementation, we would process the audio file
       // For now, we'll just set some mock data
-      setAudioData(
-        Array(50)
-          .fill(0)
-          .map(() => Math.random() * 100),
-      );
       setDuration(Math.floor(Math.random() * 180)); // Random duration between 0-180 seconds
     }
   };
@@ -223,7 +197,6 @@ const RecordingModal = ({
     setDuration(0);
     setAudioBlob(null);
     setUploadedFile(null);
-    setAudioData([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -244,6 +217,13 @@ const RecordingModal = ({
     onUpload: () => fileInputRef.current?.click(),
   };
 
+  // --- Format Duration --- 
+  const formatDuration = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
+
   return (
     <Dialog 
       open={isOpen} 
@@ -251,111 +231,113 @@ const RecordingModal = ({
         if (!open) handleClose();
       }}
     >
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-background">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">
-            Record Conversation
-          </DialogTitle>
+      <DialogContent className="sm:max-w-[525px] p-0">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle>{activeTab === "record" ? "Record New Conversation" : "Upload Audio File"}</DialogTitle>
         </DialogHeader>
-
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as "record" | "upload")}
-          className="mt-4"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="record">Record Audio</TabsTrigger>
-            <TabsTrigger value="upload">Upload Audio</TabsTrigger>
+        
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "upload")} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 rounded-none">
+            <TabsTrigger value="record" className="rounded-none">Record</TabsTrigger>
+            <TabsTrigger value="upload" className="rounded-none">Upload</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="record" className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="recording-title">Recording Title</Label>
-              <Input
+          <TabsContent value="record" className="p-6 flex flex-col items-center">
+            <div className="w-full mb-4">
+              <Label htmlFor="recording-title">Title (Optional)</Label>
+              <Input 
                 id="recording-title"
-                placeholder="Enter a title for your recording"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                disabled={isRecording}
+                placeholder="Enter conversation title..."
+                className="mt-1"
               />
             </div>
 
-            <WaveformVisualizer
-              audioData={audioData}
-              isRecording={isRecording}
-              isPaused={isPaused}
-              duration={duration}
-            />
-
-            <RecordingControls
-              isRecording={isRecording}
-              isPaused={isPaused}
+            <div className="h-20 w-full flex items-center justify-center bg-gray-100 rounded-md mb-4">
+              {isRecording && !isPaused ? (
+                <div className="flex items-end justify-center h-10 gap-2 animate-wave">
+                  <span className="w-2 h-full bg-black"></span>
+                  <span className="w-2 h-full bg-black"></span>
+                  <span className="w-2 h-full bg-black"></span>
+                  <span className="w-2 h-full bg-black"></span>
+                  <span className="w-2 h-full bg-black"></span>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  { isPaused ? "Recording Paused" : "Press record to start"}
+                </p>
+              )}
+            </div>
+            
+            <div className="text-lg font-mono mb-4 min-w-[5ch] text-center">
+              {formatDuration(duration)}
+            </div>
+            <RecordingControls 
               onRecord={handleRecordingControls.onRecord}
               onPause={handleRecordingControls.onPause}
               onStop={handleRecordingControls.onStop}
-              onUpload={handleRecordingControls.onUpload}
+              isRecording={isRecording}
+              isPaused={isPaused}
             />
+          </TabsContent>
 
-            <div className="text-sm text-muted-foreground">
-              {isRecording ? (
-                <p>Recording in progress. Click stop when you're finished.</p>
-              ) : audioBlob ? (
-                <p>
-                  Recording complete. Click save to continue or record again.
-                </p>
-              ) : (
-                <p>Click the microphone button to start recording.</p>
+          <TabsContent value="upload" className="p-6 flex flex-col items-center">
+            <div className="w-full mb-4">
+              <Label htmlFor="upload-title">Title (Optional)</Label>
+              <Input 
+                id="upload-title"
+                value={title} 
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={uploadedFile ? "Using file name" : "Enter conversation title..."}
+                className="mt-1"
+                disabled={!!uploadedFile}
+              />
+            </div>
+
+            <div className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center mb-4 h-40 text-center">
+               {uploadedFile ? (
+                  <div>
+                    <p className="text-sm font-medium">Selected: {uploadedFile.name}</p>
+                    <p className="text-xs text-gray-500">{formatDuration(duration)}</p> 
+                  </div>
+               ) : (
+                  <p className="text-sm text-gray-500">Drag & drop audio file here, or click to select</p>
+               )}
+              <Input 
+                ref={fileInputRef}
+                type="file" 
+                accept="audio/*" 
+                onChange={handleFileUpload} 
+                className="hidden" 
+                id="audio-upload" 
+              />
+              {!uploadedFile && (
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                      Select File
+                  </Button>
+              )}
+              {uploadedFile && (
+                 <Button variant="outline" size="sm" className="mt-4" onClick={() => { setUploadedFile(null); setDuration(0); if(fileInputRef.current) fileInputRef.current.value=""; }}>
+                      Clear Selection
+                 </Button>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="upload" className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="upload-title">Recording Title</Label>
-              <Input
-                id="upload-title"
-                placeholder="Enter a title for your audio file"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="audio/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="mb-2"
-              >
-                Choose Audio File
-              </Button>
-              <p className="text-sm text-muted-foreground">
-                {uploadedFile ? uploadedFile.name : "No file selected"}
-              </p>
-            </div>
-
-            {uploadedFile && (
-              <WaveformVisualizer audioData={audioData} duration={duration} />
-            )}
-          </TabsContent>
         </Tabs>
-
-        <DialogFooter className="mt-6">
-          <Button
-            onClick={handleSave}
-            disabled={
-              isSaving ||
-              (activeTab === "record" && !audioBlob) ||
-              (activeTab === "upload" && !uploadedFile)
-            }
+        
+        <DialogFooter className="p-6 pt-0">
+          <Button 
+            variant="outline" 
+            onClick={handleClose}
+            disabled={isSaving}
+           >Cancel</Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={!audioBlob && !uploadedFile || isSaving}
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? "Saving..." : "Save Conversation"}
           </Button>
         </DialogFooter>
       </DialogContent>
