@@ -7,6 +7,7 @@ from background_task import background # Import the background decorator
 # Import the services
 from .services.transcription import DeepgramTranscriptionService
 from .services.recap import recap_interview # Corrected import name
+from .services.summary import summarize_transcript # Import the summary service
 
 # Configure logging for tasks
 task_logger = logging.getLogger('background_tasks')
@@ -145,11 +146,102 @@ def process_recap_task(conversation_id):
         conversation.save(update_fields=['recap_text', 'status_recap', 'updated_at'])
         task_logger.info(f"[Recap Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
 
+        # --- Trigger Summary Task --- 
+        # Ensure summary status is pending before triggering
+        if conversation.status_summary == Conversation.STATUS_PENDING:
+            task_logger.info(f"[Recap Task] Scheduling summary task for Conversation ID: {conversation.id}")
+            process_summary_task(conversation.id, schedule=5) # Schedule summary 5 seconds later
+        else:
+            task_logger.info(f"[Recap Task] Summary task not triggered for {conversation.id} as status is not PENDING ({conversation.status_summary})")
+        # --------------------------
+
     except Exception as e:
         task_logger.error(f"[Recap Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
         try:
             conversation.status_recap = Conversation.STATUS_FAILED
-            conversation.save(update_fields=['status_recap', 'updated_at'])
+            # Also mark summary as failed if recap failed
+            conversation.status_summary = Conversation.STATUS_FAILED 
+            conversation.save(update_fields=['status_recap', 'status_summary', 'updated_at'])
             task_logger.info(f"[Recap Task] Status set to FAILED for Conversation ID: {conversation.id}")
         except Exception as save_exc:
-            task_logger.error(f"[Recap Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}") 
+            task_logger.error(f"[Recap Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
+
+# --- New Summary Task --- 
+@background(schedule=1)
+def process_summary_task(conversation_id):
+    """
+    Background task to generate short, balanced, and detailed summaries.
+    """
+    task_logger.info(f"[Summary Task] Starting process for Conversation ID: {conversation_id}")
+    try:
+        conversation = Conversation.objects.get(id=conversation_id)
+    except Conversation.DoesNotExist:
+        task_logger.error(f"[Summary Task] Conversation ID {conversation_id} not found. Aborting.")
+        return
+
+    # Check if transcription was successful and text exists
+    if conversation.status_transcription != Conversation.STATUS_COMPLETED or not conversation.transcription_text:
+        task_logger.warning(f"[Summary Task] Transcription not completed or text missing for {conversation_id}. Aborting summary.")
+        if conversation.status_summary == Conversation.STATUS_PENDING:
+             conversation.status_summary = Conversation.STATUS_FAILED
+             conversation.save(update_fields=['status_summary', 'updated_at'])
+        return
+
+    try:
+        # Mark summary as processing
+        conversation.status_summary = Conversation.STATUS_PROCESSING
+        conversation.summary_data = {} # Clear old data
+        conversation.save(update_fields=['status_summary', 'summary_data', 'updated_at'])
+        task_logger.info(f"[Summary Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
+
+        # Parse the stored JSON transcription (similar to recap task)
+        try:
+            parsed_segments = json.loads(conversation.transcription_text)
+            if not isinstance(parsed_segments, list):
+                raise ValueError("Parsed transcription is not a list")
+            # Format into a single string for the summarizer
+            formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            task_logger.error(f"[Summary Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
+            raise ValueError(f"Invalid transcription format: {e}") # Propagate error
+
+        if not formatted_transcript.strip():
+             task_logger.warning(f"[Summary Task] Formatted transcript is empty for {conversation.id}. Skipping summary.")
+             raise ValueError("Formatted transcript is empty")
+
+        # --- Call the Summary Service for each focus level --- 
+        summary_results = {}
+        focus_levels = {"short": 1, "balanced": 5, "detailed": 10}
+        
+        task_logger.info(f"[Summary Task] Calling summarize_transcript service for Conversation ID: {conversation.id}")
+        for key, focus in focus_levels.items():
+            task_logger.info(f"[Summary Task] Generating summary with focus {focus} ({key})...")
+            summary = summarize_transcript(formatted_transcript, focus=focus)
+            if summary is None:
+                task_logger.warning(f"[Summary Task] Summary service returned None for focus {focus} ({key}) for {conversation.id}")
+                # Store None or an empty string? Decide based on requirements.
+                summary_results[key] = None 
+            else:
+                summary_results[key] = summary
+                task_logger.info(f"[Summary Task] Generated summary for focus {focus} ({key}).")
+        # ------------------------------------------------------
+
+        # Check if at least one summary was generated
+        if not any(summary_results.values()):
+            task_logger.error(f"[Summary Task] All summary generations failed or returned None for {conversation.id}")
+            raise ValueError("Summary service failed for all focus levels")
+
+        # Update model with results
+        conversation.summary_data = summary_results
+        conversation.status_summary = Conversation.STATUS_COMPLETED
+        conversation.save(update_fields=['summary_data', 'status_summary', 'updated_at'])
+        task_logger.info(f"[Summary Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
+
+    except Exception as e:
+        task_logger.error(f"[Summary Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
+        try:
+            conversation.status_summary = Conversation.STATUS_FAILED
+            conversation.save(update_fields=['status_summary', 'updated_at'])
+            task_logger.info(f"[Summary Task] Status set to FAILED for Conversation ID: {conversation.id}")
+        except Exception as save_exc:
+            task_logger.error(f"[Summary Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}") 

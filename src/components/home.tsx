@@ -23,6 +23,17 @@ interface Conversation {
   status_transcription: string; // e.g., 'pending', 'processing', 'completed', 'failed'
   status_transcription_display: string; // e.g., 'Pending', 'Processing', ...
   transcription_text: string | null;
+  // Add Recap/Summary fields (matching ConversationDetail)
+  status_recap: string;
+  status_recap_display: string;
+  recap_text: string | null;
+  status_summary: string;
+  status_summary_display: string;
+  summary_data: { 
+    short: string | null;
+    balanced: string | null;
+    detailed: string | null;
+  } | null;
 }
 
 // Define filter options structure (now matches SearchFilter)
@@ -272,84 +283,60 @@ const Home = () => {
   // --- Render Logic --- 
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <Header userName="Abhishek Suman" />
-      <main className="flex-1 p-6 overflow-y-auto">
-        <div className="max-w-4xl mx-auto mb-6">
-           <SearchFilter onSearchChange={handleSearchChange} onFilter={handleFilterChange} />
+    <div className="flex flex-col h-screen bg-gray-100">
+      <Header />
+
+      <main className="flex-grow overflow-y-auto p-4 md:p-6">
+        {/* Search and Filter Bar */}
+        <div className="mb-6">
+          <SearchFilter 
+            onSearchChange={handleSearchChange}
+            onFilter={handleFilterChange}
+          />
         </div>
-        
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4">Recent Conversations</h2>
 
-          {/* Loading State */} 
-          {isLoading && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">Loading conversations...</p>
-            </div>
-          )}
-
-          {/* Error State */} 
-          {error && (
-            <div className="text-center py-12 border border-dashed border-red-400 rounded-lg bg-red-50 p-4">
-              <p className="text-red-600 font-medium">Error loading conversations</p>
-              <p className="text-red-500 text-sm mt-2">{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="mt-4"
-                onClick={() => window.location.reload()} // Simple refresh retry
-              >
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {/* Empty State (adjusted for filtering) */} 
-          {!isLoading && !error && conversations.length > 0 && filteredConversations.length === 0 && (
-            <div className="text-center py-12 border border-dashed rounded-lg">
-              <p className="text-gray-500">No conversations match your search "{searchTerm}".</p>
-            </div>
-          )}
-          {!isLoading && !error && conversations.length === 0 && (
-            <div className="text-center py-12 border border-dashed rounded-lg">
-              <p className="text-gray-500">No conversations yet.</p>
-              <p className="text-gray-400 text-sm mt-2">
-                Click the button below to start recording or uploading.
-              </p>
-            </div>
-          )}
-
-          {/* Data Display (uses filteredConversations) */} 
-          {!isLoading && !error && filteredConversations.length > 0 && (
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredConversations.map((conv) => (
-                <ConversationCard
-                  key={conv.id}
-                  id={String(conv.id)}
-                  title={conv.name}
-                  date={formatDate(conv.created_at)}
-                  duration={formatDuration(conv.duration)}
-                  // Generate and pass the preview
-                  transcriptionPreview={createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
-                  onClick={() => handleViewDetails(conv.id)}
-                  onDelete={() => handleDeleteConversation(conv.id)}
-                  onTitleChange={handleTitleChange}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Conversation Grid or Message */}
+        {isLoading ? (
+          <div className="text-center py-10">Loading conversations...</div>
+        ) : error ? (
+          <div className="text-center py-10 text-red-600">
+            <p>{error}</p>
+            <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">Retry</Button>
+          </div>
+        ) : filteredConversations.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredConversations.map((conv) => (
+              <ConversationCard
+                key={conv.id}
+                id={String(conv.id)} // Convert id to string if needed by Card
+                title={conv.name}
+                date={formatDate(conv.created_at)}
+                duration={formatDuration(conv.duration)}
+                // Update prop name to match ConversationCard
+                previewText={conv.summary_data?.short ?? createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
+                onDelete={() => handleDeleteConversation(conv.id)}
+                onClick={() => handleViewDetails(conv.id)}
+                onTitleChange={(id, newTitle) => handleTitleChange(Number(id), newTitle)} // Convert id back to number if needed
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-10 text-gray-500">
+            No conversations found.
+          </div>
+        )}
       </main>
+
       <FloatingActionButton onFabClick={() => setIsRecordingModalOpen(true)} />
-      <RecordingModal
-        isOpen={isRecordingModalOpen}
-        onClose={() => setIsRecordingModalOpen(false)}
-        onSave={handleSaveRecording}
-        isSaving={isSaving} // Pass saving state to modal for potential UI feedback
-      />
-      {/* Add Toaster component here if using shadcn/ui toast */}
-      {/* <Toaster /> */}
+
+      {isRecordingModalOpen && (
+        <RecordingModal
+          isOpen={isRecordingModalOpen}
+          onClose={() => setIsRecordingModalOpen(false)}
+          onSave={handleSaveRecording}
+          isSaving={isSaving}
+        />
+      )}
     </div>
   );
 };

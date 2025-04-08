@@ -20,8 +20,15 @@ class Conversation(models.Model):
         (STATUS_FAILED, 'Failed'),
     ]
 
-    # Add Status choices for Recap (similar structure)
+    # Add Status choices for Recap and Summary (similar structure)
     STATUS_RECAP_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
+    STATUS_SUMMARY_CHOICES = [
         (STATUS_PENDING, 'Pending'),
         (STATUS_PROCESSING, 'Processing'),
         (STATUS_COMPLETED, 'Completed'),
@@ -48,13 +55,26 @@ class Conversation(models.Model):
     # analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis") # Removed for now
     # status_analysis = models.CharField(max_length=50, default='none') # Removed for now
 
-    # Recap fields (New)
+    # Recap fields
     status_recap = models.CharField(
         max_length=20,
         choices=STATUS_RECAP_CHOICES,
         default=STATUS_PENDING
     )
     recap_text = models.TextField(null=True, blank=True) # To store the summarized text
+
+    # Summary fields
+    status_summary = models.CharField(
+        max_length=20,
+        choices=STATUS_SUMMARY_CHOICES,
+        default=STATUS_PENDING
+    )
+    summary_data = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
+        help_text="JSON object containing short, balanced, and detailed summaries"
+    )
 
     def __str__(self):
         return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
@@ -63,10 +83,13 @@ class Conversation(models.Model):
     def status_transcription_display(self):
         return self.get_status_transcription_display()
 
-    # Add display property for recap status
     @property
     def status_recap_display(self):
         return self.get_status_recap_display()
+
+    @property
+    def status_summary_display(self):
+        return self.get_status_summary_display()
 
     # Override save method to ensure directory exists (optional but good practice)
     # def save(self, *args, **kwargs):

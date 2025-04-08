@@ -75,18 +75,18 @@ const SearchFilter: React.FC<SearchFilterProps> = ({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-2 w-full bg-white p-2 rounded-lg shadow-sm">
-      <div className="relative flex-grow">
+    <div className="flex flex-row items-center gap-2 w-full bg-white p-2 rounded-lg shadow-sm">
+      <div className="relative flex-grow max-w-[calc(100%-100px)]">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search conversations by name or content..."
+          placeholder="Search conversations..."
           className="w-full rounded-lg bg-background pl-9 pr-4 py-2 text-sm border-gray-300 focus:border-primary focus:ring-primary"
           onChange={handleInputChange}
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex-shrink-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

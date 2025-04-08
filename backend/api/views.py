@@ -39,17 +39,26 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     # Override destroy to delete the associated audio file
     def perform_destroy(self, instance):
-        # Check if there is an associated audio file
-        if instance.audio_file:
-            # Get the path/name relative to the storage
-            file_name = instance.audio_file.name
-            # Delete the file using the storage backend
-            # Use `save=False` because we are about to delete the model instance anyway
-            instance.audio_file.delete(save=False)
-            print(f"Deleted associated audio file: {file_name}") # Optional logging
+        try:
+            # Check if there is an associated audio file
+            if instance.audio_file:
+                # Get the path/name relative to the storage
+                file_name = instance.audio_file.name
+                try:
+                    # Delete the file using the storage backend
+                    # Use `save=False` because we are about to delete the model instance anyway
+                    instance.audio_file.delete(save=False)
+                    print(f"Deleted associated audio file: {file_name}") # Optional logging
+                except Exception as e:
+                    print(f"Warning: Could not delete audio file {file_name}: {str(e)}")
+                    # Continue with deletion even if file deletion fails
+                    # This ensures the database record is still deleted
         
-        # Now, proceed with deleting the model instance from the database
-        super().perform_destroy(instance)
+            # Now, proceed with deleting the model instance from the database
+            super().perform_destroy(instance)
+        except Exception as e:
+            print(f"Error during conversation deletion: {str(e)}")
+            raise
 
     # If you need custom logic on create/update (e.g., extracting duration
     # from the uploaded file), you might override perform_create or perform_update.

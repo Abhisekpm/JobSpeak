@@ -15,7 +15,7 @@ interface ConversationCardProps {
   title?: string;
   date?: string;
   duration?: string;
-  transcriptionPreview?: string;
+  previewText?: string;
   onDelete?: () => void;
   onClick?: () => void;
   onTitleChange?: (id: string, newTitle: string) => void;
@@ -26,7 +26,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
   title = "Team Weekly Standup",
   date = "May 15, 2023",
   duration = "32:45",
-  transcriptionPreview = "John: I've been working on the new feature. Sarah: Great progress! I think we should focus on...",
+  previewText = "No preview available.",
   onDelete = () => console.log("Delete clicked"),
   onClick = () => console.log("Card clicked"),
   onTitleChange = () => {},
@@ -114,7 +114,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
 
       <CardContent className="flex-grow overflow-hidden">
         <CardDescription className="line-clamp-4 text-sm text-gray-600">
-          {transcriptionPreview}
+          {previewText}
         </CardDescription>
       </CardContent>
 

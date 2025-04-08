@@ -7,6 +7,7 @@ import { Card } from "./ui/card";
 import TranscriptionView from "./TranscriptionView";
 import AnalysisPanel from "./AnalysisPanel";
 import RecapView from "./RecapView"; // Import the new RecapView component
+import SummaryView from "./SummaryView"; // Import the new SummaryView component
 import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
@@ -26,6 +27,15 @@ interface Conversation {
   status_recap: string;
   status_recap_display: string;
   recap_text: string | null;
+  // Summary fields
+  status_summary: string;
+  status_summary_display: string;
+  // Change summary_text to an object holding different lengths
+  summary_data: { 
+    short: string | null;
+    balanced: string | null;
+    detailed: string | null;
+  } | null;
   // Analysis fields (if/when added)
   // status_analysis: string;
   // status_analysis_display: string;
@@ -78,20 +88,21 @@ const ConversationDetail: React.FC = () => {
               setAudioDuration(0);
             }
             
-            // Check if transcription OR recap is still processing
+            // Check if transcription OR recap OR summary is still processing
             const isTranscriptionProcessing = fetchedConversation.status_transcription === 'processing' || fetchedConversation.status_transcription === 'pending';
             const isRecapProcessing = fetchedConversation.status_recap === 'processing' || fetchedConversation.status_recap === 'pending';
+            const isSummaryProcessing = fetchedConversation.status_summary === 'processing' || fetchedConversation.status_summary === 'pending';
 
-            if (isTranscriptionProcessing || isRecapProcessing) {
+            if (isTranscriptionProcessing || isRecapProcessing || isSummaryProcessing) {
                 // If processing, schedule a refetch (polling)
                 if (!intervalId) { // Start polling only once if needed
-                    console.log(`Polling started (Transcription: ${isTranscriptionProcessing}, Recap: ${isRecapProcessing})`);
+                    console.log(`Polling started (Transcription: ${isTranscriptionProcessing}, Recap: ${isRecapProcessing}, Summary: ${isSummaryProcessing})`);
                     intervalId = setInterval(fetchConversationDetail, 5000); // Poll every 5 seconds
                 }
             } else {
-                // If both completed or failed, stop polling
+                // If all completed or failed, stop polling
                 if (intervalId) {
-                    console.log("Transcription and Recap finished, stopping poll.");
+                    console.log("All processes finished, stopping poll.");
                     clearInterval(intervalId);
                     intervalId = null;
                 }
@@ -370,7 +381,8 @@ const ConversationDetail: React.FC = () => {
       <Tabs defaultValue="transcript" className="flex-grow flex flex-col">
         <TabsList className="mb-4 flex-shrink-0">
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
-          <TabsTrigger value="recap">Recap</TabsTrigger> {/* Add Recap Tab Trigger */}
+          <TabsTrigger value="recap">Recap</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="analysis">Analysis</TabsTrigger>
         </TabsList>
 
@@ -383,13 +395,20 @@ const ConversationDetail: React.FC = () => {
             />
           </TabsContent>
 
-          {/* Add Recap Tab Content */}
           <TabsContent value="recap" className="h-full">
             <RecapView 
                recap={conversation?.recap_text}
                status={conversation?.status_recap}
                statusDisplay={conversation?.status_recap_display}
              />
+          </TabsContent>
+
+          <TabsContent value="summary" className="h-full">
+            <SummaryView 
+              summaryData={conversation?.summary_data}
+              status={conversation?.status_summary}
+              statusDisplay={conversation?.status_summary_display}
+            />
           </TabsContent>
 
           <TabsContent value="analysis" className="h-full">
