@@ -1,7 +1,8 @@
 import os
 import dotenv
 import logging
-from groq import Groq, GroqError
+import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 
 from api.models import Conversation
 
@@ -10,79 +11,82 @@ dotenv.load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Initialize Groq client
+# Configure Gemini client
 try:
-    groq_client = Groq(
-        api_key=os.environ.get('GROQ_API_KEY'),
-    )
-    if not os.environ.get('GROQ_API_KEY'):
-         logging.warning("GROQ_API_KEY environment variable not set.")
+    gemini_api_key = os.environ.get('GEMINI_API_KEY')
+    if not gemini_api_key:
+        logging.warning("GEMINI_API_KEY environment variable not set.")
+        gemini_model = None
+    else:
+        genai.configure(api_key=gemini_api_key)
+        # Use the latest available flash model
+        gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+        logging.info("Gemini client configured successfully with model gemini-2.0-flash.")
 except Exception as e:
-    logging.error(f"Failed to initialize Groq client: {e}")
-    groq_client = None # Set to None if initialization fails
+    logging.error(f"Failed to initialize Gemini client: {e}")
+    gemini_model = None # Set to None if initialization fails
+
 
 # --- Function to Recap Transcript ---
 
-# Make sure this model name is correct for your Groq account/plan
-DEFAULT_GROQ_MODEL = "llama3-70b-8192" # Example - VERIFY THIS
-
-# Corrected function name
-def recap_interview(transcript_text: str, model: str = DEFAULT_GROQ_MODEL) -> str | None:
+def recap_interview(transcript_text: str) -> str | None:
     """
-    Recaps the provided transcript text using the Groq API based on the specific system prompt.
+    Recaps the provided transcript text using the Gemini API based on the specific system prompt.
 
     Args:
         transcript_text: The formatted transcript text (e.g., speaker-separated).
-        model: The Groq model to use for summarization.
 
     Returns:
         The recapped text as a string, or None if an error occurs.
     """
-    if not groq_client:
-        logging.error("Groq client is not initialized. Cannot summarize.")
+    if not gemini_model:
+        logging.error("Gemini client is not initialized. Cannot recap.")
         return None
 
     if not transcript_text or not transcript_text.strip():
-        logging.warning("Transcript text is empty. Cannot summarize.")
+        logging.warning("Transcript text is empty. Cannot recap.")
         return None
 
-    # --- User's Original System Prompt ---
+    # --- System Prompt for Gemini ---
+    # (Keeping the original prompt as it's compatible)
     system_prompt = '''
-    You are an advanced AI designed to recap conversation transcripts while preserving details. Your recap should:
+    You are an advanced AI designed to intake conversation transcripts and provide back the conversation in a dialog format while preserving details.
 
     1. Give the conversation in a detailed dialog format after cleaning up the transcript. maintain the depth of the conversation and the details.
     2. **Maintain factual accuracy** – Ensure that all important values, statistics, and statements remain intact.
 
-    ### Recap Guidelines:
+    ### Guidelines:
     - Retain core messages and any critical data shared in the conversation.
     - Use a clear and natural writing style.
     - The output should contain **only plain text**, with no symbols, special formatting, or structured elements like key points.
+
+    below is the transcript of the conversation:
     '''
-    # --- End of User's Original System Prompt ---
+    # --- End of System Prompt ---
 
-
-    # User message containing the transcript - Using the required 'text' variable name from the original code snippet
-    # Ensure the input 'transcript_text' is used correctly here.
-    user_message = f'Transcript (raw): {transcript_text}' # Use the function parameter
+    # Construct the prompt for Gemini
+    prompt = f"{system_prompt}\n\nTranscript (raw):\n{transcript_text}"
 
     try:
-        logging.info(f"Sending transcript recap request to Groq model: {model}")
-        chat_completion = groq_client.chat.completions.create(
-            model=model, # Use the verified model name
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            # Optional: Add temperature, max_tokens etc. if needed
-        )
+        logging.info("Sending transcript recap request to Gemini model: gemini-1.5-flash")
+        # Gemini uses generate_content
+        response = gemini_model.generate_content(prompt)
 
-        recap = chat_completion.choices[0].message.content
-        logging.info("Successfully received recap from Groq.")
-        # Return the raw content as requested by the prompt (plain text)
-        return recap if recap else None
+        # Accessing the text content safely
+        recap = response.text if hasattr(response, 'text') else None
 
-    except GroqError as e:
-        logging.error(f"Groq API error during recap: {e}")
+        if recap:
+            logging.info("Successfully received recap from Gemini.")
+            return recap
+        else:
+            logging.warning(f"Gemini response did not contain text. Response: {response}")
+            # Attempt to check for prompt feedback if available
+            if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
+                logging.warning(f"Gemini prompt feedback: {response.prompt_feedback}")
+            return None
+
+    except google_exceptions.GoogleAPIError as e:
+        logging.error(f"Gemini API error during recap: {e}")
         return None
     except Exception as e:
         logging.error(f"An unexpected error occurred during recap: {e}")
@@ -96,10 +100,9 @@ def recap_interview(transcript_text: str, model: str = DEFAULT_GROQ_MODEL) -> st
 #     Speaker 0: Great! Let's aim to deploy by Friday then. Remember the deadline is strict.
 #     Speaker 1: Sounds like a plan. I'll start testing tomorrow morning.
 #     """
-#     # Assume sample_transcript is formatted appropriately before passing
-#     summary = summarize_interview(sample_transcript)
-#     if summary:
+#     recap_text = recap_interview(sample_transcript)
+#     if recap_text:
 #         print("--- Recap ---")
-#         print(summary)
+#         print(recap_text)
 #     else:
 #         print("Failed to generate recap.")

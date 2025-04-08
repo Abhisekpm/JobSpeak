@@ -25,7 +25,7 @@ const Header = ({
   onLogout = () => {},
 }: HeaderProps) => {
   return (
-    <header className="w-full h-20 bg-background border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
+    <header className="w-full h-24 bg-background border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
       <div className="flex items-center gap-2">
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
           <MessageSquare className="text-primary-foreground w-5 h-5" />

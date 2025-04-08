@@ -125,7 +125,15 @@ const Home = () => {
   };
 
   const handleTitleChange = async (id: string | number, newTitle: string) => {
-    // TODO: Replace with API call to PATCH /conversations/{id}/
+    if (!newTitle.trim()) {
+      toast({
+        title: "Invalid title",
+        description: "Title cannot be empty",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const originalConversations = [...conversations]; // Keep original state for potential revert
     // Optimistically update UI
     setConversations((prevConversations) =>
@@ -133,12 +141,17 @@ const Home = () => {
         conv.id === id ? { ...conv, name: newTitle } : conv
       )
     );
-    console.log(`Title changed for ${id} to: ${newTitle} (Optimistic UI)`);
 
     try {
-      await apiClient.patch(`/conversations/${id}/`, { name: newTitle });
-      // Optionally show success toast
-      // toast({ title: "Title updated successfully!" });
+      await apiClient.patch(
+        `/conversations/${id}/`, 
+        { name: newTitle },
+        { headers: { 'Content-Type': 'application/json' } } // Explicitly set Content-Type
+      );
+      toast({
+        title: "Title updated",
+        description: "Conversation title has been updated successfully",
+      });
     } catch (err: any) {
       console.error("Error updating title:", err);
       // Revert UI on error
@@ -316,7 +329,7 @@ const Home = () => {
                 previewText={conv.summary_data?.short ?? createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
                 onDelete={() => handleDeleteConversation(conv.id)}
                 onClick={() => handleViewDetails(conv.id)}
-                onTitleChange={(id, newTitle) => handleTitleChange(Number(id), newTitle)} // Convert id back to number if needed
+                onTitleChange={(id, newTitle) => handleTitleChange(id, newTitle)} // Pass string id directly
               />
             ))}
           </div>

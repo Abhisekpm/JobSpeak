@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Conversation
 from .serializers import ConversationSerializer
 
@@ -17,7 +17,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
     """
     queryset = Conversation.objects.all().order_by('-created_at') # Get all, newest first
     serializer_class = ConversationSerializer
-    parser_classes = (MultiPartParser, FormParser) # Add parsers for file uploads
+    parser_classes = (MultiPartParser, FormParser, JSONParser) # Add parsers for file uploads and JSON
     # Add permission classes later if needed (e.g., IsAuthenticated)
     # permission_classes = [] 
 
