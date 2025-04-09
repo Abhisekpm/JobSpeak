@@ -317,7 +317,7 @@ const Home = () => {
             <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">Retry</Button>
           </div>
         ) : filteredConversations.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredConversations.map((conv) => (
               <ConversationCard
                 key={conv.id}
@@ -329,7 +329,6 @@ const Home = () => {
                 previewText={conv.summary_data?.short ?? createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
                 onDelete={() => handleDeleteConversation(conv.id)}
                 onClick={() => handleViewDetails(conv.id)}
-                onTitleChange={(id, newTitle) => handleTitleChange(id, newTitle)} // Pass string id directly
               />
             ))}
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import {
   Card,
   CardHeader,
@@ -18,7 +18,6 @@ interface ConversationCardProps {
   previewText?: string;
   onDelete?: () => void;
   onClick?: () => void;
-  onTitleChange?: (id: string, newTitle: string) => void;
 }
 
 const ConversationCard: React.FC<ConversationCardProps> = ({
@@ -29,48 +28,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
   previewText = "No preview available.",
   onDelete = () => console.log("Delete clicked"),
   onClick = () => console.log("Card clicked"),
-  onTitleChange = () => {},
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(title);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  const handleTitleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(true);
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditedTitle(e.target.value);
-  };
-
-  const saveTitle = () => {
-    if (editedTitle && editedTitle.trim() !== title && editedTitle.trim() !== "") {
-      onTitleChange(id, editedTitle.trim());
-    }
-    setIsEditing(false);
-  };
-
-  const handleInputBlur = () => {
-    saveTitle();
-  };
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      saveTitle();
-    } else if (e.key === 'Escape') {
-      setEditedTitle(title);
-      setIsEditing(false);
-    }
-  };
-
   return (
     <Card
       className="h-[220px] bg-white hover:shadow-lg transition-shadow duration-300 cursor-pointer flex flex-col w-full"
@@ -78,27 +36,12 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
     >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          {isEditing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editedTitle}
-              onChange={handleTitleChange}
-              onBlur={handleInputBlur}
-              onKeyDown={handleInputKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              className="text-lg font-bold bg-transparent border-b border-blue-500 focus:outline-none w-full truncate"
-              aria-label="Edit conversation title"
-            />
-          ) : (
-            <CardTitle
-              onClick={handleTitleClick}
-              className="text-lg font-bold truncate cursor-pointer hover:text-blue-600"
-              title="Click to edit title"
-            >
-              {title}
-            </CardTitle>
-          )}
+          <CardTitle
+            className="text-lg font-bold truncate"
+            title={title}
+          >
+            {title}
+          </CardTitle>
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">

@@ -9,6 +9,7 @@ import AnalysisPanel from "./AnalysisPanel";
 import RecapView from "./RecapView"; // Import the new RecapView component
 import SummaryView from "./SummaryView"; // Import the new SummaryView component
 import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
+import { toast } from "./ui/use-toast"; // Import toast
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
 interface Conversation {
@@ -55,6 +56,18 @@ const ConversationDetail: React.FC = () => {
   const [isAudioReady, setIsAudioReady] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+
+  // State for inline title editing
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState<string>("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Initialize editedTitle when conversation loads ---
+  useEffect(() => {
+      if (conversation && !isEditingTitle) { // Also check if not currently editing
+          setEditedTitle(conversation.name);
+      }
+  }, [conversation?.name, isEditingTitle]); // Depend on name and editing state
 
   // --- Fetch Data ---
   useEffect(() => {
@@ -216,6 +229,94 @@ const ConversationDetail: React.FC = () => {
     // Depend on conversation.audio_file to re-run when URL changes
   }, [conversation?.audio_file]); 
 
+  // --- Inline Title Editing Logic ---
+
+  // Effect to focus input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleTitleClick = (e: React.MouseEvent) => {
+      if (conversation) {
+          e.stopPropagation();
+          setIsEditingTitle(true);
+      }
+  };
+
+  const handleTitleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEditedTitle(e.target.value);
+  };
+
+  const saveTitle = async () => {
+      // Trim whitespace before comparing and saving
+      const newTitleTrimmed = editedTitle.trim();
+
+      // Exit if no conversation loaded yet
+      if (!conversation) {
+          setIsEditingTitle(false);
+          return;
+      }
+
+      // Exit if title is empty or hasn't changed
+      if (newTitleTrimmed === "" || newTitleTrimmed === conversation.name) {
+          setIsEditingTitle(false);
+          setEditedTitle(conversation.name); // Reset input value to original valid name
+          // Optional: Show toast if title was empty
+          if (newTitleTrimmed === "" && editedTitle !== "") {
+             toast({
+                title: "Invalid Title",
+                description: "Title cannot be empty.",
+                variant: "destructive",
+             });
+          }
+          return;
+      }
+
+      const originalTitle = conversation.name;
+
+      // Optimistic UI Update
+      setConversation(prev => prev ? { ...prev, name: newTitleTrimmed } : null);
+      setIsEditingTitle(false);
+
+      try {
+          await apiClient.patch(`/conversations/${id}/`, { name: newTitleTrimmed }, {
+              headers: { 'Content-Type': 'application/json' }
+          });
+          toast({
+             title: "Title Updated",
+             description: "Conversation title saved successfully.",
+          });
+      } catch (err: any) {
+          console.error("Error updating title:", err);
+          // Revert UI on error
+          setConversation(prev => prev ? { ...prev, name: originalTitle } : null);
+          setEditedTitle(originalTitle); // Reset editedTitle state as well for consistency
+          toast({
+            title: "Error updating title",
+            description: err.response?.data?.detail || err.message || "Failed to save title change.",
+            variant: "destructive"
+          });
+      }
+  };
+
+    const handleTitleInputBlur = () => {
+        // Save on blur
+        saveTitle();
+    };
+
+    const handleTitleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            saveTitle();
+            e.preventDefault(); // Prevent potential form submission
+        } else if (e.key === 'Escape') {
+            if (conversation) setEditedTitle(conversation.name); // Reset to original
+            setIsEditingTitle(false);
+        }
+    };
+
   const formatDuration = (seconds: number | null | undefined): string => {
     if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
         return "--:--";
@@ -240,10 +341,6 @@ const ConversationDetail: React.FC = () => {
              .catch(error => { console.error("Error playing audio:", error); setIsPlaying(false); });
       } else {
           console.warn("Audio not ready according to 'canplaythrough' event yet.");
-          // Maybe trigger load again if user clicks before ready?
-          // if (audio.networkState === audio.NETWORK_IDLE || audio.networkState === audio.NETWORK_NO_SOURCE) {
-          //    audio.load(); 
-          // }
       }
     }
   };
@@ -252,22 +349,17 @@ const ConversationDetail: React.FC = () => {
   const handleSeek = (event: React.MouseEvent<HTMLDivElement>) => {
       const audio = audioRef.current;
       const progressBar = progressBarRef.current;
-      // Use audioDuration state which is updated from the audio element
-      if (!audio || !progressBar || audioDuration <= 0) return; 
+      if (!audio || !progressBar || !isAudioReady || audioDuration <= 0) return;
 
+      // Calculate the click position percentage relative to the progress bar
       const rect = progressBar.getBoundingClientRect();
       const clickX = event.clientX - rect.left;
-      const width = rect.width;
-      const seekFraction = Math.max(0, Math.min(1, clickX / width)); // Clamp between 0 and 1
-      const seekTime = seekFraction * audioDuration;
+      const percentage = Math.max(0, Math.min(1, clickX / rect.width)); // Clamp between 0 and 1
 
-      // Check if audio is ready to seek
-      if (audio.readyState >= 1) { // HAVE_METADATA or more
-        audio.currentTime = seekTime;
-        setCurrentTime(seekTime); // Update state immediately for smoother UI
-      } else {
-         console.warn("Cannot seek: Audio metadata not loaded yet.");
-      }
+      // Calculate the new time and set it
+      const newTime = percentage * audioDuration;
+      audio.currentTime = newTime;
+      setCurrentTime(newTime); // Update state immediately for responsiveness
   };
 
   const handleBack = () => {
@@ -325,7 +417,28 @@ const ConversationDetail: React.FC = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{title}</h1>
+            {isEditingTitle ? (
+                <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editedTitle}
+                    onChange={handleTitleInputChange}
+                    onBlur={handleTitleInputBlur}
+                    onKeyDown={handleTitleInputKeyDown}
+                    onClick={(e) => e.stopPropagation()} // Prevent triggering other clicks
+                    className="text-xl font-semibold bg-transparent border-b border-primary focus:outline-none w-full px-1 py-0.5 -my-0.5" // Adjusted styles
+                    aria-label="Edit conversation title"
+                    autoComplete="off"
+                />
+            ) : (
+                <h1
+                    onClick={handleTitleClick}
+                    className="text-2xl font-bold truncate cursor-pointer hover:text-primary px-1 py-0.5 -my-0.5" // Adjusted styles & added padding like input
+                    title={conversation.name} // Show full title on hover
+                >
+                    {conversation.name}
+                </h1>
+            )}
             <div className="flex items-center text-gray-500 text-sm mt-1">
               <span>{date}</span>
               <span className="mx-2">•</span>
