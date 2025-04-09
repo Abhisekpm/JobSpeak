@@ -54,6 +54,7 @@ def recap_interview(transcript_text: str) -> str | None:
 
     1. Give the conversation in a detailed dialog format after cleaning up the transcript. maintain the depth of the conversation and the details.
     2. **Maintain factual accuracy** – Ensure that all important values, statistics, and statements remain intact.
+    3. Try to identify the speaker names based on the contents of the conversation 
 
     ### Guidelines:
     - Retain core messages and any critical data shared in the conversation.

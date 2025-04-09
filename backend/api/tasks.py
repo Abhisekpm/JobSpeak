@@ -170,7 +170,8 @@ def process_recap_task(conversation_id):
 @background(schedule=1)
 def process_summary_task(conversation_id):
     """
-    Background task to generate short, balanced, and detailed summaries.
+    Background task to generate detailed, balanced, and short summaries in a chain.
+    Detailed uses recap text, Balanced uses Detailed, Short uses Balanced.
     """
     task_logger.info(f"[Summary Task] Starting process for Conversation ID: {conversation_id}")
     try:
@@ -179,9 +180,9 @@ def process_summary_task(conversation_id):
         task_logger.error(f"[Summary Task] Conversation ID {conversation_id} not found. Aborting.")
         return
 
-    # Check if transcription was successful and text exists
-    if conversation.status_transcription != Conversation.STATUS_COMPLETED or not conversation.transcription_text:
-        task_logger.warning(f"[Summary Task] Transcription not completed or text missing for {conversation_id}. Aborting summary.")
+    # Prerequisite: Recap must be completed and have text
+    if conversation.status_recap != Conversation.STATUS_COMPLETED or not conversation.recap_text:
+        task_logger.warning(f"[Summary Task] Recap not completed or text missing for {conversation_id}. Aborting summary.")
         if conversation.status_summary == Conversation.STATUS_PENDING:
              conversation.status_summary = Conversation.STATUS_FAILED
              conversation.save(update_fields=['status_summary', 'updated_at'])
@@ -194,54 +195,70 @@ def process_summary_task(conversation_id):
         conversation.save(update_fields=['status_summary', 'summary_data', 'updated_at'])
         task_logger.info(f"[Summary Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
 
-        # Parse the stored JSON transcription (similar to recap task)
-        try:
-            parsed_segments = json.loads(conversation.transcription_text)
-            if not isinstance(parsed_segments, list):
-                raise ValueError("Parsed transcription is not a list")
-            # Format into a single string for the summarizer
-            formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            task_logger.error(f"[Summary Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
-            raise ValueError(f"Invalid transcription format: {e}") # Propagate error
+        summary_results = {
+            "detailed": None,
+            "balanced": None,
+            "short": None
+        }
+        current_input_text = conversation.recap_text
+        error_occurred = False
 
-        if not formatted_transcript.strip():
-             task_logger.warning(f"[Summary Task] Formatted transcript is empty for {conversation.id}. Skipping summary.")
-             raise ValueError("Formatted transcript is empty")
+        # 1. Generate Detailed Summary (from Recap Text)
+        task_logger.info(f"[Summary Task] Generating detailed summary (focus 10) from recap...")
+        detailed_summary = summarize_transcript(current_input_text, focus=10)
+        if detailed_summary:
+            summary_results["detailed"] = detailed_summary
+            current_input_text = detailed_summary # Input for next step
+            task_logger.info(f"[Summary Task] Generated detailed summary.")
+        else:
+            task_logger.error(f"[Summary Task] Failed to generate detailed summary for {conversation.id}. Aborting chain.")
+            error_occurred = True
 
-        # --- Call the Summary Service for each focus level --- 
-        summary_results = {}
-        focus_levels = {"short": 1, "balanced": 5, "detailed": 10}
-        
-        task_logger.info(f"[Summary Task] Calling summarize_transcript service for Conversation ID: {conversation.id}")
-        for key, focus in focus_levels.items():
-            task_logger.info(f"[Summary Task] Generating summary with focus {focus} ({key})...")
-            summary = summarize_transcript(formatted_transcript, focus=focus)
-            if summary is None:
-                task_logger.warning(f"[Summary Task] Summary service returned None for focus {focus} ({key}) for {conversation.id}")
-                # Store None or an empty string? Decide based on requirements.
-                summary_results[key] = None 
+        # 2. Generate Balanced Summary (from Detailed Summary)
+        if not error_occurred:
+            task_logger.info(f"[Summary Task] Generating balanced summary (focus 5) from detailed summary...")
+            balanced_summary = summarize_transcript(current_input_text, focus=5)
+            if balanced_summary:
+                summary_results["balanced"] = balanced_summary
+                current_input_text = balanced_summary # Input for next step
+                task_logger.info(f"[Summary Task] Generated balanced summary.")
             else:
-                summary_results[key] = summary
-                task_logger.info(f"[Summary Task] Generated summary for focus {focus} ({key}).")
-        # ------------------------------------------------------
+                task_logger.error(f"[Summary Task] Failed to generate balanced summary for {conversation.id}. Aborting chain.")
+                error_occurred = True
 
-        # Check if at least one summary was generated
-        if not any(summary_results.values()):
-            task_logger.error(f"[Summary Task] All summary generations failed or returned None for {conversation.id}")
-            raise ValueError("Summary service failed for all focus levels")
+        # 3. Generate Short Summary (from Balanced Summary)
+        if not error_occurred:
+            task_logger.info(f"[Summary Task] Generating short summary (focus 1) from balanced summary...")
+            short_summary = summarize_transcript(current_input_text, focus=1)
+            if short_summary:
+                summary_results["short"] = short_summary
+                task_logger.info(f"[Summary Task] Generated short summary.")
+            else:
+                # Don't mark as error, maybe short summary just failed?
+                task_logger.warning(f"[Summary Task] Failed to generate short summary for {conversation.id}. Proceeding with other results.")
+                # error_occurred = True # Decide if this should halt completion
 
-        # Update model with results
+        # --- Update Model --- 
         conversation.summary_data = summary_results
-        conversation.status_summary = Conversation.STATUS_COMPLETED
+        # Mark completed only if the crucial detailed/balanced summaries were generated
+        if summary_results["detailed"] and summary_results["balanced"]:
+             conversation.status_summary = Conversation.STATUS_COMPLETED
+             task_logger.info(f"[Summary Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
+        else:
+             # If the chain broke early, mark as failed
+             conversation.status_summary = Conversation.STATUS_FAILED
+             task_logger.error(f"[Summary Task] Summary chain failed (detailed or balanced summary missing). Status set to FAILED for Conversation ID: {conversation.id}")
+        
         conversation.save(update_fields=['summary_data', 'status_summary', 'updated_at'])
-        task_logger.info(f"[Summary Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
 
     except Exception as e:
-        task_logger.error(f"[Summary Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
+        task_logger.error(f"[Summary Task] Unexpected error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
         try:
+            # Ensure status is FAILED on any unexpected exception
             conversation.status_summary = Conversation.STATUS_FAILED
-            conversation.save(update_fields=['status_summary', 'updated_at'])
-            task_logger.info(f"[Summary Task] Status set to FAILED for Conversation ID: {conversation.id}")
+            # Optionally clear summary_data if it's partially filled and inconsistent
+            conversation.summary_data = summary_results if 'summary_results' in locals() else {} 
+            conversation.save(update_fields=['summary_data', 'status_summary', 'updated_at'])
+            task_logger.info(f"[Summary Task] Status set to FAILED due to unexpected error for Conversation ID: {conversation.id}")
         except Exception as save_exc:
-            task_logger.error(f"[Summary Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}") 
+            task_logger.error(f"[Summary Task] Could not mark as failed after unexpected error for Conversation ID {conversation.id}: {save_exc}") 
