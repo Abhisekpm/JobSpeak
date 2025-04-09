@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Conversation
+from django.contrib.auth import get_user_model
+from .models import Conversation  # Remove Message import
+
+User = get_user_model()
 
 class ConversationSerializer(serializers.ModelSerializer):
     # Make audio_file read-only in list/detail views, handle upload separately
@@ -96,4 +99,29 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
             duration=duration, 
             **validated_data # Pass remaining data (audio_file)
         )
-        return conversation 
+        return conversation
+
+class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'password')
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True},
+            'username': {'required': True},
+        }
+    
+    def create(self, validated_data):
+        try:
+            user = User.objects.create_user(
+                username=validated_data['username'],
+                email=validated_data['email'],
+                password=validated_data['password']
+            )
+            return user
+        except Exception as e:
+            # Log any errors during user creation
+            print(f"Error creating user: {str(e)}")
+            raise serializers.ValidationError(str(e))

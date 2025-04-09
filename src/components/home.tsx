@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import apiClient from "../lib/apiClient"; // Import the API client
-import Header from "./Header";
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
 import RecordingModal from "./RecordingModal";
@@ -29,7 +28,7 @@ interface Conversation {
   recap_text: string | null;
   status_summary: string;
   status_summary_display: string;
-  summary_data: { 
+  summary_data: {
     short: string | null;
     balanced: string | null;
     detailed: string | null;
@@ -44,6 +43,7 @@ interface FilterOptions {
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user, loading } = useAuth(); // Access auth state
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true); // For initial load
@@ -54,11 +54,16 @@ const Home = () => {
 
   // Effect to fetch conversations from the API on component mount
   useEffect(() => {
+    if (!isAuthenticated && !loading) {
+      navigate("/login"); // Redirect to login if not authenticated
+      return;
+    }
+
     const fetchConversations = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await apiClient.get<Conversation[]>('/conversations/');
+        const response = await apiClient.get<Conversation[]>("/conversations/");
         setConversations(response.data);
       } catch (err: any) {
         console.error("Error fetching conversations:", err);
@@ -67,11 +72,14 @@ const Home = () => {
         setIsLoading(false);
       }
     };
-    fetchConversations();
-  }, []);
 
-  // --- Handlers --- 
-  
+    if (isAuthenticated) {
+      fetchConversations();
+    }
+  }, [isAuthenticated, loading, navigate]);
+
+  // --- Handlers ---
+
   // Handler for search input changes
   const handleSearchChange = (term: string) => {
     setSearchTerm(term);
@@ -83,39 +91,52 @@ const Home = () => {
     console.log("Active Filters Updated:", newFilters); // Log for debugging
   };
 
-  const handleSaveRecording = async (data: { title: string; audio: Blob; duration: number }) => {
+  const handleSaveRecording = async (data: {
+    title: string;
+    audio: Blob;
+    duration: number;
+  }) => {
     setIsSaving(true);
     // Create FormData
     const formData = new FormData();
-    formData.append('name', data.title || "Untitled Recording");
-    formData.append('duration', String(Math.round(data.duration))); // Ensure duration is integer string
+    formData.append("name", data.title || "Untitled Recording");
+    formData.append("duration", String(Math.round(data.duration))); // Ensure duration is integer string
     // Append the audio blob with a filename
-    const fileName = `${data.title || 'recording'}-${Date.now()}.wav`; // Example filename
-    formData.append('audio_file', data.audio, fileName);
+    const fileName = `${data.title || "recording"}-${Date.now()}.wav`; // Example filename
+    formData.append("audio_file", data.audio, fileName);
 
     try {
       // Send POST request to the backend
-      const response = await apiClient.post<Conversation>('/conversations/', formData, {
-        headers: {
-          // Axios typically sets multipart/form-data automatically for FormData,
-          // but specifying it can sometimes help avoid issues.
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await apiClient.post<Conversation>(
+        "/conversations/",
+        formData,
+        {
+          headers: {
+            // Axios typically sets multipart/form-data automatically for FormData,
+            // but specifying it can sometimes help avoid issues.
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       // Add the newly created conversation (from response) to the beginning of the list
-      setConversations((prevConversations) => [response.data, ...prevConversations]);
+      setConversations((prevConversations) => [
+        response.data,
+        ...prevConversations,
+      ]);
       setIsRecordingModalOpen(false); // Close modal on success
       // Optionally show a success toast
       // toast({ title: "Conversation saved successfully!" });
-
     } catch (err: any) {
       console.error("Error saving conversation:", err);
       // Optionally show an error toast
-      toast({ 
-        title: "Error saving conversation", 
-        description: err.response?.data?.detail || err.message || "An unknown error occurred.",
-        variant: "destructive" 
+      toast({
+        title: "Error saving conversation",
+        description:
+          err.response?.data?.detail ||
+          err.message ||
+          "An unknown error occurred.",
+        variant: "destructive",
       });
       // Keep the modal open if save fails, so user doesn't lose data?
       // Or add more robust error handling
@@ -129,7 +150,7 @@ const Home = () => {
       toast({
         title: "Invalid title",
         description: "Title cannot be empty",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -144,9 +165,9 @@ const Home = () => {
 
     try {
       await apiClient.patch(
-        `/conversations/${id}/`, 
+        `/conversations/${id}/`,
         { name: newTitle },
-        { headers: { 'Content-Type': 'application/json' } } // Explicitly set Content-Type
+        { headers: { "Content-Type": "application/json" } } // Explicitly set Content-Type
       );
       toast({
         title: "Title updated",
@@ -158,14 +179,16 @@ const Home = () => {
       setConversations(originalConversations);
       toast({
         title: "Error updating title",
-        description: err.response?.data?.detail || err.message || "Failed to save title change.",
-        variant: "destructive"
+        description:
+          err.response?.data?.detail ||
+          err.message ||
+          "Failed to save title change.",
+        variant: "destructive",
       });
     }
   };
 
   const handleDeleteConversation = async (id: string | number) => {
-    // TODO: Replace with API call to DELETE /conversations/{id}/
     const originalConversations = [...conversations]; // Keep original state for potential revert
     // Optimistically update UI
     setConversations((prevConversations) =>
@@ -183,8 +206,11 @@ const Home = () => {
       setConversations(originalConversations);
       toast({
         title: "Error deleting conversation",
-        description: err.response?.data?.detail || err.message || "Failed to delete conversation.",
-        variant: "destructive"
+        description:
+          err.response?.data?.detail ||
+          err.message ||
+          "Failed to delete conversation.",
+        variant: "destructive",
       });
     }
   };
@@ -201,22 +227,31 @@ const Home = () => {
       return "Invalid Date";
     }
   };
-  
+
   // Helper function to format duration (can be moved to utils if needed)
   const formatDuration = (seconds: number | null | undefined): string => {
-    if (seconds === null || seconds === undefined || isNaN(seconds) || seconds < 0) return "--:--";
+    if (
+      seconds === null ||
+      seconds === undefined ||
+      isNaN(seconds) ||
+      seconds < 0
+    )
+      return "--:--";
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
   // Helper function to create transcription preview
-  const createTranscriptionPreview = (text: string | null | undefined, status: string | undefined): string => {
-    if (status === 'processing' || status === 'pending') {
+  const createTranscriptionPreview = (
+    text: string | null | undefined,
+    status: string | undefined
+  ): string => {
+    if (status === "processing" || status === "pending") {
       return "Transcription processing...";
     }
-    if (!text || text.trim() === '') {
-      if (status === 'failed') {
+    if (!text || text.trim() === "") {
+      if (status === "failed") {
         return "Transcription failed.";
       } else {
         return "No transcription available."; // Or maybe just empty string?
@@ -229,12 +264,16 @@ const Home = () => {
     return text.substring(0, maxLength) + "...";
   };
 
-  // --- Filtering Logic --- 
-  const filteredConversations = conversations.filter(conv => {
+  // --- Filtering Logic ---
+  const filteredConversations = conversations.filter((conv) => {
     // 1. Search Term Filter (Name or Transcription)
-    const searchMatch = searchTerm === '' || 
-                         conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (conv.transcription_text && conv.transcription_text.toLowerCase().includes(searchTerm.toLowerCase()));
+    const searchMatch =
+      searchTerm === "" ||
+      conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (conv.transcription_text &&
+        conv.transcription_text
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()));
 
     if (!searchMatch) return false;
 
@@ -252,14 +291,14 @@ const Home = () => {
         switch (dateFilter) {
           case "Today":
             startDate = new Date(today);
-            endDate = new Date(today); 
+            endDate = new Date(today);
             endDate.setHours(23, 59, 59, 999); // End of today
             break;
           case "This Week":
             startDate = new Date(today);
             startDate.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-             // Or Monday: startDate.setDate(today.getDate() - (today.getDay() + 6) % 7);
-            endDate = new Date(startDate); 
+            // Or Monday: startDate.setDate(today.getDate() - (today.getDay() + 6) % 7);
+            endDate = new Date(startDate);
             endDate.setDate(startDate.getDate() + 6);
             endDate.setHours(23, 59, 59, 999); // End of week
             break;
@@ -274,11 +313,16 @@ const Home = () => {
             endDate.setHours(23, 59, 59, 999);
             break;
         }
-        
+
         // Check if conversation date falls within the calculated range
-        if (startDate && endDate && 
-            !isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && 
-            createdAt >= startDate && createdAt <= endDate) {
+        if (
+          startDate &&
+          endDate &&
+          !isNaN(startDate.getTime()) &&
+          !isNaN(endDate.getTime()) &&
+          createdAt >= startDate &&
+          createdAt <= endDate
+        ) {
           dateMatch = true;
           break; // Found a match for one of the selected date filters
         }
@@ -293,62 +337,68 @@ const Home = () => {
     return true;
   });
 
-  // --- Render Logic --- 
+  // --- Render Logic ---
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <Header />
-
-      <main className="flex-grow overflow-y-auto p-4 md:p-6">
-        {/* Search and Filter Bar */}
-        <div className="mb-6">
-          <SearchFilter 
-            onSearchChange={handleSearchChange}
-            onFilter={handleFilterChange}
-          />
-        </div>
-
-        {/* Conversation Grid or Message */}
-        {isLoading ? (
-          <div className="text-center py-10">Loading conversations...</div>
-        ) : error ? (
-          <div className="text-center py-10 text-red-600">
-            <p>{error}</p>
-            <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">Retry</Button>
-          </div>
-        ) : filteredConversations.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredConversations.map((conv) => (
-              <ConversationCard
-                key={conv.id}
-                id={String(conv.id)} // Convert id to string if needed by Card
-                title={conv.name}
-                date={formatDate(conv.created_at)}
-                duration={formatDuration(conv.duration)}
-                // Update prop name to match ConversationCard
-                previewText={conv.summary_data?.short ?? createTranscriptionPreview(conv.transcription_text, conv.status_transcription)}
-                onDelete={() => handleDeleteConversation(conv.id)}
-                onClick={() => handleViewDetails(conv.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-10 text-gray-500">
-            No conversations found.
-          </div>
-        )}
-      </main>
-
-      <FloatingActionButton onFabClick={() => setIsRecordingModalOpen(true)} />
-
-      {isRecordingModalOpen && (
-        <RecordingModal
-          isOpen={isRecordingModalOpen}
-          onClose={() => setIsRecordingModalOpen(false)}
-          onSave={handleSaveRecording}
-          isSaving={isSaving}
+    <div className="container mx-auto px-4 py-8">
+      {/* Search and Filter Bar */}
+      <div className="mb-6">
+        <SearchFilter
+          onSearchChange={handleSearchChange}
+          onFilter={handleFilterChange}
         />
+      </div>
+
+      {/* Conversation Grid or Message */}
+      {isLoading ? (
+        <div className="text-center py-10">Loading conversations...</div>
+      ) : error ? (
+        <div className="text-center py-10 text-red-600">
+          <p>{error}</p>
+          <Button
+            onClick={() => window.location.reload()}
+            variant="outline"
+            className="mt-4"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : filteredConversations.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {filteredConversations.map((conv) => (
+            <ConversationCard
+              key={conv.id}
+              id={String(conv.id)} // Convert id to string if needed by Card
+              title={conv.name}
+              date={formatDate(conv.created_at)}
+              duration={formatDuration(conv.duration)}
+              // Update prop name to match ConversationCard
+              previewText={
+                conv.summary_data?.short ??
+                createTranscriptionPreview(
+                  conv.transcription_text,
+                  conv.status_transcription
+                )
+              }
+              onDelete={() => handleDeleteConversation(conv.id)}
+              onClick={() => handleViewDetails(conv.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-10 text-gray-500">
+          No conversations found.
+        </div>
       )}
+
+      <RecordingModal
+        isOpen={isRecordingModalOpen}
+        onClose={() => setIsRecordingModalOpen(false)}
+        onSave={handleSaveRecording}
+        isSaving={isSaving}
+      />
+
+      <FloatingActionButton onClick={() => setIsRecordingModalOpen(true)} />
     </div>
   );
 };

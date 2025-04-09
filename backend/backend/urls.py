@@ -16,12 +16,23 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.conf import settings # Import settings
-from django.conf.urls.static import static # Import static
+from django.conf import settings
+from django.conf.urls.static import static
+from rest_framework_simplejwt.views import TokenRefreshView
+from api.views import register_user, get_user_details
+from api.authentication import FlexibleTokenObtainPairView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    
+    # Use our custom flexible token view
+    path('api/token/', FlexibleTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # User registration and details endpoints
+    path('api/register/', register_user, name='register'),
+    path('api/users/me/', get_user_details, name='user_details'),
 ]
 
 # Add URL pattern for serving media files during development

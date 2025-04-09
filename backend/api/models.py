@@ -115,4 +115,5 @@ class Conversation(models.Model):
     # Override save method (optional but can be useful)
     # def save(self, *args, **kwargs):
     #     # Add logic if needed
-    #     super().save(*args, **kwargs) 
+    #     super().save(*args, **kwargs)
+# Check the existing models

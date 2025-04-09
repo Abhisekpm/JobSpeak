@@ -1,14 +1,41 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Conversation
-from .serializers import ConversationSerializer
-
-# Import Django's default storage
+from .serializers import ConversationSerializer, UserSerializer
+from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
-
-# Import the Celery task
 from .tasks import process_transcription_task
 
+User = get_user_model()
+
+# Add user registration view
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    # Log the incoming data
+    print(f"Registration request data: {request.data}")
+    
+    serializer = UserSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    # Print validation errors
+    print(f"Registration validation errors: {serializer.errors}")
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Add user detail view
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_details(request):
+    print(f"User details requested for: {request.user.username}")
+    serializer = UserSerializer(request.user)
+    return Response(serializer.data)
+
+# Modify conversation views to use authentication
 class ConversationViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows conversations to be viewed or edited.
@@ -18,8 +45,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
     queryset = Conversation.objects.all().order_by('-created_at') # Get all, newest first
     serializer_class = ConversationSerializer
     parser_classes = (MultiPartParser, FormParser, JSONParser) # Add parsers for file uploads and JSON
-    # Add permission classes later if needed (e.g., IsAuthenticated)
-    # permission_classes = [] 
+    permission_classes = [IsAuthenticated]  # Add permission class
+    
+    def get_queryset(self):
+        # Filter conversations by current user
+        return Conversation.objects.all()  # For now, return all - in a real app, filter by user
 
     # Override perform_create to enqueue transcription task
     def perform_create(self, serializer):
@@ -67,4 +97,4 @@ class ConversationViewSet(viewsets.ModelViewSet):
     #     instance = serializer.save()
     #     # Add logic here to process instance.audio_file if needed
     #     # instance.duration = calculate_duration(instance.audio_file)
-    #     # instance.save() 
+    #     # instance.save()
