@@ -16,52 +16,83 @@ import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { cn } from "../lib/utils";
 import {
-  BarChart,
-  PieChart,
   Activity,
   MessageSquare,
   Clock,
-  ThumbsUp,
-  ThumbsDown,
+  Info,
+  List,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 
-interface AnalysisPanelProps {
-  talkTimeRatio?: {
-    speaker1: number;
-    speaker2: number;
-  };
-  sentiment?: {
-    positive: number;
-    neutral: number;
-    negative: number;
-  };
-  topics?: Array<{
-    name: string;
-    relevance: number;
-  }>;
-  keywords?: Array<{
-    word: string;
-    count: number;
-  }>;
+interface Conversation {
+  id: number;
+  name: string;
+  status_analysis: string;
+  status_analysis_display: string;
+  analysis_results: {
+    talk_time_ratio: { [speaker: string]: number } | null;
+    sentiment: { label: string; reasoning: string } | null;
+    topics: string[] | null;
+  } | null;
 }
 
-const AnalysisPanel = ({
-  talkTimeRatio = { speaker1: 65, speaker2: 35 },
-  sentiment = { positive: 45, neutral: 40, negative: 15 },
-  topics = [
-    { name: "Product Features", relevance: 85 },
-    { name: "Pricing", relevance: 70 },
-    { name: "Customer Support", relevance: 60 },
-    { name: "Competitors", relevance: 40 },
-  ],
-  keywords = [
-    { word: "integration", count: 12 },
-    { word: "pricing", count: 8 },
-    { word: "timeline", count: 7 },
-    { word: "support", count: 6 },
-    { word: "features", count: 5 },
-  ],
-}: AnalysisPanelProps) => {
+interface AnalysisPanelProps {
+  conversation: Conversation | null;
+}
+
+const getSpeakerColor = (index: number) => {
+  const colors = ["bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-purple-500", "bg-red-500"];
+  return colors[index % colors.length];
+};
+
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ conversation }) => {
+
+  if (!conversation) {
+    return <div className="p-4 text-center text-muted-foreground">No conversation data available.</div>;
+  }
+
+  const { status_analysis, analysis_results } = conversation;
+
+  if (status_analysis === 'pending' || status_analysis === 'processing') {
+    return (
+      <Card className="w-full h-full flex flex-col items-center justify-center bg-white shadow-md p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">
+          {status_analysis === 'pending' ? "Analysis Pending..." : "Processing Analysis..."}
+        </p>
+      </Card>
+    );
+  }
+
+  if (status_analysis === 'failed') {
+    return (
+      <Card className="w-full h-full flex flex-col items-center justify-center bg-white shadow-md p-6">
+        <AlertCircle className="h-8 w-8 text-destructive mb-4" />
+        <p className="text-destructive font-medium">Analysis Failed</p>
+        <p className="text-muted-foreground text-sm text-center mt-1">
+          Could not generate analysis for this conversation.
+        </p>
+      </Card>
+    );
+  }
+
+  if (!analysis_results || 
+      (!analysis_results.talk_time_ratio && !analysis_results.sentiment && !analysis_results.topics)) 
+  {
+    return (
+      <Card className="w-full h-full flex flex-col items-center justify-center bg-white shadow-md p-6">
+         <Info className="h-8 w-8 text-muted-foreground mb-4" />
+         <p className="text-muted-foreground font-medium">Analysis Not Available</p>
+         <p className="text-muted-foreground text-sm text-center mt-1">
+           Analysis data could not be generated or is empty.
+         </p>
+       </Card>
+    );
+  }
+
+  const { talk_time_ratio, sentiment, topics } = analysis_results;
+
   return (
     <Card className="w-full h-full bg-white shadow-md">
       <CardHeader className="pb-2">
@@ -71,116 +102,69 @@ const AnalysisPanel = ({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="topics">Topics</TabsTrigger>
-            <TabsTrigger value="keywords">Keywords</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  Talk Time Distribution
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Speaker 1</span>
-                    <span>{talkTimeRatio.speaker1}%</span>
-                  </div>
-                  <Progress value={talkTimeRatio.speaker1} className="h-2" />
-
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Speaker 2</span>
-                    <span>{talkTimeRatio.speaker2}%</span>
-                  </div>
-                  <Progress value={talkTimeRatio.speaker2} className="h-2" />
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                  Sentiment Analysis
-                </h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="flex flex-col items-center p-2 rounded-md bg-green-50">
-                    <ThumbsUp className="h-5 w-5 text-green-500 mb-1" />
-                    <span className="text-xs text-muted-foreground">
-                      Positive
-                    </span>
-                    <span className="font-medium">{sentiment.positive}%</span>
-                  </div>
-                  <div className="flex flex-col items-center p-2 rounded-md bg-gray-50">
-                    <div className="h-5 w-5 rounded-full border border-gray-300 mb-1" />
-                    <span className="text-xs text-muted-foreground">
-                      Neutral
-                    </span>
-                    <span className="font-medium">{sentiment.neutral}%</span>
-                  </div>
-                  <div className="flex flex-col items-center p-2 rounded-md bg-red-50">
-                    <ThumbsDown className="h-5 w-5 text-red-500 mb-1" />
-                    <span className="text-xs text-muted-foreground">
-                      Negative
-                    </span>
-                    <span className="font-medium">{sentiment.negative}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="topics" className="space-y-4">
+        <div className="space-y-6">
+          {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && (
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                <PieChart className="h-4 w-4 text-muted-foreground" />
-                Key Topics Identified
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                Talk Time Distribution
               </h3>
               <div className="space-y-3">
-                {topics.map((topic, index) => (
-                  <div key={index} className="space-y-1">
+                {Object.entries(talk_time_ratio).map(([speaker, percentage], index) => (
+                  <div key={speaker} className="space-y-1">
                     <div className="flex justify-between items-center text-sm">
-                      <span>{topic.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {topic.relevance}% relevance
-                      </span>
+                      <span className="capitalize">{speaker.replace('_', ' ')}</span>
+                      <span>{percentage}%</span>
                     </div>
-                    <Progress value={topic.relevance} className="h-2" />
+                    <Progress value={percentage} className={cn("h-2", getSpeakerColor(index))} />
                   </div>
                 ))}
               </div>
             </div>
-          </TabsContent>
+          )}
 
-          <TabsContent value="keywords" className="space-y-4">
+          {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && sentiment && <Separator />}
+
+          {sentiment && (
+            <div>
+              <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                Overall Sentiment
+              </h3>
+              <div className="flex items-start gap-3 p-3 rounded-md border bg-muted/50">
+                 <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                 <div>
+                     <p className="text-sm font-medium">{sentiment.label || "Unknown"}</p>
+                     <p className="text-sm text-muted-foreground italic">
+                         {sentiment.reasoning || "No reasoning provided."}
+                     </p>
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {sentiment && topics && topics.length > 0 && <Separator />}
+
+          {topics && topics.length > 0 && (
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                <BarChart className="h-4 w-4 text-muted-foreground" />
-                Frequently Used Keywords
+                <List className="h-4 w-4 text-muted-foreground" />
+                Key Topics Identified
               </h3>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {keywords.map((keyword, index) => (
+              <div className="flex flex-wrap gap-2">
+                {topics.map((topic, index) => (
                   <Badge
                     key={index}
-                    variant="outline"
-                    className={cn(
-                      "py-1 px-2 text-xs",
-                      keyword.count > 10
-                        ? "bg-primary/10 border-primary/20"
-                        : "",
-                    )}
+                    variant="secondary"
+                    className="py-1 px-2 text-xs font-normal"
                   >
-                    {keyword.word} ({keyword.count})
+                    {topic}
                   </Badge>
                 ))}
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

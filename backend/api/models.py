@@ -8,65 +8,49 @@ def conversation_audio_path(instance, filename):
     return f'conversations/{instance.id}/{filename}'
 
 class Conversation(models.Model):
-    # Transcription Status Choices
+    # --- Status Definitions ---
     STATUS_PENDING = 'pending'
     STATUS_PROCESSING = 'processing'
     STATUS_COMPLETED = 'completed'
     STATUS_FAILED = 'failed'
-    TRANSCRIPTION_STATUS_CHOICES = [
+    
+    # Generic choices tuple (can be reused)
+    STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'),
         (STATUS_PROCESSING, 'Processing'),
         (STATUS_COMPLETED, 'Completed'),
         (STATUS_FAILED, 'Failed'),
     ]
 
-    # Add Status choices for Recap and Summary (similar structure)
-    STATUS_RECAP_CHOICES = [
-        (STATUS_PENDING, 'Pending'),
-        (STATUS_PROCESSING, 'Processing'),
-        (STATUS_COMPLETED, 'Completed'),
-        (STATUS_FAILED, 'Failed'),
-    ]
-
-    STATUS_SUMMARY_CHOICES = [
-        (STATUS_PENDING, 'Pending'),
-        (STATUS_PROCESSING, 'Processing'),
-        (STATUS_COMPLETED, 'Completed'),
-        (STATUS_FAILED, 'Failed'),
-    ]
-
+    # --- Core Fields ---
     name = models.CharField(max_length=255, blank=True, default='Untitled Conversation')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    # Status field can be expanded later (e.g., 'processing', 'transcribed', 'analyzed')
-    status = models.CharField(max_length=50, default='created')
-    # Add audio file field
+    status = models.CharField(max_length=50, default='created') # Legacy/overall status, maybe remove later?
     audio_file = models.FileField(upload_to=conversation_audio_path, null=True, blank=True)
-    # Add duration field (in seconds)
     duration = models.PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds")
 
-    # Phase 3 Fields
+    # --- Transcription Fields ---
     status_transcription = models.CharField(
         max_length=20,
-        choices=TRANSCRIPTION_STATUS_CHOICES,
+        choices=STATUS_CHOICES,
         default=STATUS_PENDING
     )
-    transcription_text = models.TextField(blank=True, null=True)
-    # analysis_results = models.JSONField(null=True, blank=True, help_text="Results of the analysis") # Removed for now
-    # status_analysis = models.CharField(max_length=50, default='none') # Removed for now
+    # Store transcription as JSON directly from Deepgram for flexibility
+    transcription_text = models.JSONField(null=True, blank=True, help_text="Raw transcription result (JSON)")
 
-    # Recap fields
+    # --- Recap Fields ---
     status_recap = models.CharField(
         max_length=20,
-        choices=STATUS_RECAP_CHOICES,
+        choices=STATUS_CHOICES,
         default=STATUS_PENDING
     )
-    recap_text = models.TextField(null=True, blank=True) # To store the summarized text
+    recap_text = models.TextField(null=True, blank=True, help_text="Generated dialog-style recap")
 
-    # Summary fields
+    # --- Summary Fields ---
     status_summary = models.CharField(
         max_length=20,
-        choices=STATUS_SUMMARY_CHOICES,
+        choices=STATUS_CHOICES,
         default=STATUS_PENDING
     )
     summary_data = models.JSONField(
@@ -76,9 +60,36 @@ class Conversation(models.Model):
         help_text="JSON object containing short, balanced, and detailed summaries"
     )
 
+    # --- NEW: Analysis Fields ---
+    status_analysis = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    analysis_results = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict, # Use dict for default empty JSON
+        help_text="JSON object containing talk_time_ratio, sentiment, and topics"
+    )
+
+    # --- NEW: Coaching Fields ---
+    status_coaching = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    coaching_feedback = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Generated coaching feedback text"
+    )
+
+    # --- String Representation ---
     def __str__(self):
         return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
 
+    # --- Status Display Properties ---
     @property
     def status_transcription_display(self):
         return self.get_status_transcription_display()
@@ -91,14 +102,17 @@ class Conversation(models.Model):
     def status_summary_display(self):
         return self.get_status_summary_display()
 
-    # Override save method to ensure directory exists (optional but good practice)
+    @property
+    def status_analysis_display(self):
+        """Returns the display name for the analysis status."""
+        return self.get_status_analysis_display()
+    
+    @property
+    def status_coaching_display(self):
+        """Returns the display name for the coaching status."""
+        return self.get_status_coaching_display()
+
+    # Override save method (optional but can be useful)
     # def save(self, *args, **kwargs):
-    #     if self.pk is None: # Only on creation before file is saved
-    #         saved = super().save(*args, **kwargs)
-    #         # Now self.id is available, ensure directory exists *before* file save attempt
-    #         if self.audio_file:
-    #             dir_path = os.path.dirname(self.audio_file.path)
-    #             os.makedirs(dir_path, exist_ok=True)
-    #         return saved
-    #     else:
-    #         return super().save(*args, **kwargs) 
+    #     # Add logic if needed
+    #     super().save(*args, **kwargs) 

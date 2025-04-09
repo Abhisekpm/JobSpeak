@@ -8,6 +8,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     status_transcription_display = serializers.CharField(source='get_status_transcription_display', read_only=True)
     status_recap_display = serializers.CharField(source='get_status_recap_display', read_only=True)
     status_summary_display = serializers.CharField(source='get_status_summary_display', read_only=True)
+    status_analysis_display = serializers.CharField(source='get_status_analysis_display', read_only=True)
+    status_coaching_display = serializers.CharField(source='get_status_coaching_display', read_only=True)
 
     class Meta:
         model = Conversation
@@ -29,6 +31,12 @@ class ConversationSerializer(serializers.ModelSerializer):
             'status_summary',
             'status_summary_display',
             'summary_data',
+            'status_analysis',
+            'status_analysis_display',
+            'analysis_results',
+            'status_coaching',
+            'status_coaching_display',
+            'coaching_feedback',
         ]
         read_only_fields = [
             'id', 
@@ -44,6 +52,12 @@ class ConversationSerializer(serializers.ModelSerializer):
             'status_summary',
             'status_summary_display',
             'summary_data',
+            'status_analysis',
+            'status_analysis_display',
+            'analysis_results',
+            'status_coaching',
+            'status_coaching_display',
+            'coaching_feedback',
         ]
 
     def get_audio_file_url(self, obj):

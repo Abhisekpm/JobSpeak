@@ -10,8 +10,15 @@ import RecapView from "./RecapView"; // Import the new RecapView component
 import SummaryView from "./SummaryView"; // Import the new SummaryView component
 import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
 import { toast } from "./ui/use-toast"; // Import toast
+import { Loader2, AlertTriangle, Info } from "lucide-react";
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
+interface TranscriptionSegment {
+  speaker: number | string;
+  transcript: string;
+  // Add other potential fields
+}
+
 interface Conversation {
   id: number;
   name: string;
@@ -23,7 +30,7 @@ interface Conversation {
   // Transcription fields
   status_transcription: string;
   status_transcription_display: string;
-  transcription_text: string | null;
+  transcription_text: TranscriptionSegment[] | null;
   // Recap fields
   status_recap: string;
   status_recap_display: string;
@@ -38,9 +45,17 @@ interface Conversation {
     detailed: string | null;
   } | null;
   // Analysis fields (if/when added)
-  // status_analysis: string;
-  // status_analysis_display: string;
-  // analysis_results: string | null;
+  status_analysis: string;
+  status_analysis_display: string;
+  analysis_results: {
+    talk_time_ratio: { [speaker: string]: number } | null;
+    sentiment: { label: string; reasoning: string } | null;
+    topics: string[] | null;
+  } | null;
+  // Coaching fields (Add if needed by other components)
+  status_coaching: string;
+  status_coaching_display: string;
+  coaching_feedback: string | null;
 }
 
 const ConversationDetail: React.FC = () => {
@@ -74,17 +89,13 @@ const ConversationDetail: React.FC = () => {
     let isMounted = true; 
     let intervalId: NodeJS.Timeout | null = null; 
     
-    // Reset state (keep isPlaying, currentTime, audioDuration reset here)
+    // Reset state
     setIsPlaying(false);
     setCurrentTime(0);
     setAudioDuration(0);
-    // isAudioReady will be handled by the other useEffect now
 
     const fetchConversationDetail = async () => {
-      if (!isMounted) return; // Don't fetch if component unmounted
-      // Keep loading state only for initial load?
-      // setIsLoading(true);
-      // setError(null); // Don't clear error on refetch?
+      if (!isMounted) return;
 
       try {
         const response = await apiClient.get<Conversation>(`/conversations/${id}/`);
@@ -93,23 +104,26 @@ const ConversationDetail: React.FC = () => {
             setConversation(fetchedConversation);
             console.log("Fetched Conversation Data:", fetchedConversation);
 
-            // Re-initialize audioDuration state with backend value
+            // Re-initialize audioDuration state
             if (fetchedConversation.duration !== null && Number.isFinite(fetchedConversation.duration)) {
-              console.log("Setting initial audio duration from backend:", fetchedConversation.duration);
               setAudioDuration(fetchedConversation.duration);
             } else {
               setAudioDuration(0);
             }
             
-            // Check if transcription OR recap OR summary is still processing
-            const isTranscriptionProcessing = fetchedConversation.status_transcription === 'processing' || fetchedConversation.status_transcription === 'pending';
-            const isRecapProcessing = fetchedConversation.status_recap === 'processing' || fetchedConversation.status_recap === 'pending';
-            const isSummaryProcessing = fetchedConversation.status_summary === 'processing' || fetchedConversation.status_summary === 'pending';
+            // Check if ANY process is still pending or processing
+            const isProcessing = [
+                fetchedConversation.status_transcription,
+                fetchedConversation.status_recap,
+                fetchedConversation.status_summary,
+                fetchedConversation.status_analysis, // Add analysis status check
+                fetchedConversation.status_coaching  // Add coaching status check
+            ].some(status => status === 'processing' || status === 'pending');
 
-            if (isTranscriptionProcessing || isRecapProcessing || isSummaryProcessing) {
-                // If processing, schedule a refetch (polling)
-                if (!intervalId) { // Start polling only once if needed
-                    console.log(`Polling started (Transcription: ${isTranscriptionProcessing}, Recap: ${isRecapProcessing}, Summary: ${isSummaryProcessing})`);
+            if (isProcessing) {
+                // If processing, schedule a refetch
+                if (!intervalId) { // Start polling only once
+                    console.log("Polling started as some processes are pending/processing...");
                     intervalId = setInterval(fetchConversationDetail, 5000); // Poll every 5 seconds
                 }
             } else {
@@ -138,19 +152,18 @@ const ConversationDetail: React.FC = () => {
         }
       } finally {
           if (isMounted) {
-            setIsLoading(false); // Set loading false after first fetch attempt
+            setIsLoading(false); 
           }
       }
     };
 
     if (id) {
-        fetchConversationDetail(); // Initial fetch
+        fetchConversationDetail(); 
     } else {
         setError("Conversation ID is missing from URL.");
         setIsLoading(false);
     }
 
-    // Cleanup function
     return () => {
       isMounted = false;
       if (intervalId) {
@@ -158,7 +171,7 @@ const ConversationDetail: React.FC = () => {
         clearInterval(intervalId);
       }
     };
-  }, [id]); // Re-run effect if ID changes
+  }, [id]);
 
   // --- Audio Event Listeners & Source Setting ---
   useEffect(() => {
@@ -405,6 +418,28 @@ const ConversationDetail: React.FC = () => {
                           ? (currentTime / currentDuration) * 100 
                           : 0;
 
+  // --- Parse transcription_text before rendering --- 
+  let parsedTranscription: TranscriptionSegment[] | null = null;
+  if (conversation.transcription_text) {
+      try {
+          // Check if it's already an object/array (e.g., if Axios parsed it deeply)
+          if (typeof conversation.transcription_text === 'object' && Array.isArray(conversation.transcription_text)) {
+              parsedTranscription = conversation.transcription_text;
+          } else if (typeof conversation.transcription_text === 'string') {
+               // Attempt to parse if it's a string (most likely case)
+              const parsed = JSON.parse(conversation.transcription_text);
+              if (Array.isArray(parsed)) { // Basic validation
+                  parsedTranscription = parsed;
+              } else {
+                   console.error("Parsed transcription_text is not an array:", parsed);
+              }
+          }
+      } catch (error) {
+          console.error("Failed to parse transcription_text JSON:", error, "Raw data:", conversation.transcription_text);
+      }
+  }
+  // --- End Parsing --- 
+
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 p-4 md:p-6">
       {/* Change preload to "auto" */}
@@ -490,44 +525,61 @@ const ConversationDetail: React.FC = () => {
         </div>
       </Card>
 
-      {/* Content Tabs */}
-      <Tabs defaultValue="transcript" className="flex-grow flex flex-col">
-        <TabsList className="mb-4 flex-shrink-0">
+      {/* Tabs for Views */}
+      {/* Set default tab to 'transcript' */}
+      <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden min-h-0">
+        {/* Use flex-wrap for responsiveness instead of fixed grid, increase bottom margin */}
+        <TabsList className="flex flex-wrap justify-start gap-2 mb-6 shrink-0">
+          {/* Reordered and Renamed TabsTrigger components */}
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
           <TabsTrigger value="recap">Recap</TabsTrigger>
           <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="coaching">Coaching</TabsTrigger>
           <TabsTrigger value="analysis">Analysis</TabsTrigger>
         </TabsList>
 
-        <div className="flex-grow overflow-hidden">
-          <TabsContent value="transcript" className="h-full">
-            <TranscriptionView 
-              transcription={conversation?.transcription_text}
-              status={conversation?.status_transcription}
-              statusDisplay={conversation?.status_transcription_display}
-            />
-          </TabsContent>
+        {/* Content sections remain - order in code doesn't affect display */}
+        <TabsContent value="analysis" className="flex-1 overflow-auto">
+            <AnalysisPanel conversation={conversation} />
+        </TabsContent>
 
-          <TabsContent value="recap" className="h-full">
-            <RecapView 
-               recap={conversation?.recap_text}
-               status={conversation?.status_recap}
-               statusDisplay={conversation?.status_recap_display}
-             />
-          </TabsContent>
+        <TabsContent value="coaching" className="flex-1 overflow-auto">
+             <Card className="p-4 h-full overflow-y-auto">
+                 <h3 className="font-semibold mb-2 text-lg">Coaching Feedback</h3>
+                 {conversation.status_coaching === 'pending' || conversation.status_coaching === 'processing' ? (
+                     <div className="flex items-center justify-center h-32 text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Processing...
+                     </div>
+                 ) : conversation.status_coaching === 'failed' ? (
+                     <div className="flex items-center justify-center h-32 text-destructive">
+                         <AlertTriangle className="h-6 w-6 mr-2" /> Failed to generate coaching feedback.
+                     </div>
+                 ) : conversation.coaching_feedback ? (
+                     <p className="whitespace-pre-wrap text-sm leading-relaxed">{conversation.coaching_feedback}</p>
+                 ) : (
+                     <div className="flex items-center justify-center h-32 text-muted-foreground">
+                        <Info className="h-6 w-6 mr-2" /> Coaching feedback not available.
+                     </div>
+                 )}
+             </Card>
+        </TabsContent>
 
-          <TabsContent value="summary" className="h-full">
-            <SummaryView 
-              summaryData={conversation?.summary_data}
-              status={conversation?.status_summary}
-              statusDisplay={conversation?.status_summary_display}
-            />
-          </TabsContent>
+        <TabsContent value="recap" className="flex-1 overflow-auto">
+          <RecapView conversation={conversation} />
+        </TabsContent>
 
-          <TabsContent value="analysis" className="h-full">
-            <AnalysisPanel />
-          </TabsContent>
-        </div>
+        <TabsContent value="summary" className="flex-1 overflow-auto">
+            <SummaryView conversation={conversation} />
+        </TabsContent>
+        
+        {/* Update TabsContent value */}
+        <TabsContent value="transcript" className="flex-1 overflow-auto">
+          <TranscriptionView
+            transcription={parsedTranscription}
+            status={conversation.status_transcription}
+            statusDisplay={conversation.status_transcription_display}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   );

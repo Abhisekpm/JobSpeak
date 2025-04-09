@@ -4,75 +4,57 @@ import { Button } from "./ui/button";
 import { Copy, Download, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
 
 // Define the structure of a single transcription segment
+// This should match the structure within the JSON blob from the backend
 interface TranscriptionSegment {
-  speaker: number;
+  speaker: number | string; // Allow string or number for speaker ID
   transcript: string;
+  // Add other potential fields if they exist in your JSON (e.g., start_time, end_time)
 }
 
 // Define props for the simplified view
 interface TranscriptionViewProps {
-  transcription: string | null | undefined; // This will now be a JSON string
+  // Update type to expect the parsed JSON object (or null)
+  transcription: TranscriptionSegment[] | null | undefined; 
   status: string | null | undefined; // e.g., 'pending', 'processing', 'completed', 'failed'
   statusDisplay: string | null | undefined; // e.g., 'Pending', 'Processing', ...
 }
 
 const TranscriptionView: React.FC<TranscriptionViewProps> = ({
-  transcription,
+  transcription, // This prop is now the already parsed array (or null)
   status,
   statusDisplay
 }) => {
 
-  // Helper function to parse and validate the transcription JSON
-  const parseTranscription = (): TranscriptionSegment[] | null => {
-    if (!transcription) return null;
-    try {
-      const parsed = JSON.parse(transcription);
-      // Basic validation: check if it's an array and elements have speaker/transcript
-      if (Array.isArray(parsed) && parsed.every(seg => typeof seg.speaker === 'number' && typeof seg.transcript === 'string')) {
-        return parsed;
-      }
-      console.error("Parsed transcription is not a valid segment array:", parsed);
-      return null;
-    } catch (error) {
-      console.error("Failed to parse transcription JSON:", error);
-      return null;
-    }
-  };
+  // Helper function removed - parsing happens in parent or before passing prop
+  // const parseTranscription = (): TranscriptionSegment[] | null => { ... };
 
-  // Function to format the parsed transcription for copying
+  // Function to format the transcription for copying
   const formatForCopy = (segments: TranscriptionSegment[] | null): string => {
     if (!segments) return "";
+    // Use a consistent format, handle potential string/number speakers
     return segments.map(seg => `Speaker ${seg.speaker}: ${seg.transcript}`).join("\n\n");
   };
 
   const handleCopy = () => {
-    const parsedSegments = parseTranscription();
-    const textToCopy = formatForCopy(parsedSegments);
+    // Use the prop directly
+    const textToCopy = formatForCopy(transcription);
 
     if (textToCopy) {
       navigator.clipboard.writeText(textToCopy)
         .then(() => {
+          // Optional: show success toast
           console.log("Formatted transcription copied to clipboard!");
         })
         .catch(err => {
           console.error("Failed to copy formatted transcription: ", err);
-        });
-    } else if (transcription) {
-        // Fallback: Copy raw string if parsing/formatting failed but original string exists
-         navigator.clipboard.writeText(transcription)
-        .then(() => {
-          console.log("Copied raw transcription data to clipboard.");
-        })
-        .catch(err => {
-          console.error("Failed to copy raw transcription data: ", err);
+          // Optional: show error toast
         });
     }
   };
 
-  // Placeholder for export functionality (could also use formatted text)
+  // Placeholder for export functionality
   const handleExport = () => {
-    const parsedSegments = parseTranscription();
-    const textToExport = formatForCopy(parsedSegments);
+    const textToExport = formatForCopy(transcription);
     if (textToExport) {
          // Basic TXT download implementation
          const blob = new Blob([textToExport], { type: 'text/plain' });
@@ -87,6 +69,7 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
          console.log("Exporting formatted transcription as text file.");
     } else {
          console.log("No valid transcription data to export.");
+         // Optional: show info toast
     }
   };
 
@@ -102,29 +85,19 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
           </div>
         );
       case 'completed':
-        const parsedSegments = parseTranscription();
-
-        if (parsedSegments && parsedSegments.length > 0) {
-          // Display the parsed transcription segments
+        // Use the transcription prop directly
+        if (transcription && transcription.length > 0) {
           return (
             <ScrollArea className="flex-grow bg-gray-50 rounded-md p-4">
-              {parsedSegments.map((segment, index) => (
+              {transcription.map((segment, index) => (
                 <div key={index} className="mb-3">
+                  {/* Handle potential string/number speaker IDs */}
                   <span className="font-semibold mr-2">{`Speaker ${segment.speaker}:`}</span>
                   <span>{segment.transcript}</span>
                 </div>
               ))}
             </ScrollArea>
           );
-        } else if (transcription) { 
-             // Handle case where parsing failed but original data exists
-              return (
-                <div className="flex flex-col items-center justify-center h-full text-orange-500">
-                    <AlertTriangle className="h-8 w-8 mb-2" />
-                    <p>Transcription complete, but the format is unexpected or invalid.</p>
-                    <p className="text-xs text-gray-400 mt-1">Raw data might be available for copy/export.</p>
-                </div>
-              );
         } else {
           // Handle case where status is completed but transcription is null/empty
           return (
@@ -151,7 +124,8 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
     }
   };
 
-  const canCopyOrExport = status === 'completed' && transcription && transcription.trim() !== '';
+  // Update check: Can copy/export if status is completed and parsed transcription exists and is not empty
+  const canCopyOrExport = status === 'completed' && transcription && transcription.length > 0;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 w-full h-full flex flex-col">

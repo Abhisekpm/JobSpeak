@@ -3,18 +3,23 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
 import { Copy, Download, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
 
-// Define props for the recap view
-interface RecapViewProps {
-  recap: string | null | undefined;
-  status: string | null | undefined; // e.g., 'pending', 'processing', 'completed', 'failed'
-  statusDisplay: string | null | undefined; // e.g., 'Pending', 'Processing', ...
+// Define the minimal Conversation structure needed by this component
+interface Conversation {
+  recap_text: string | null;
+  status_recap: string;
+  status_recap_display: string;
 }
 
-const RecapView: React.FC<RecapViewProps> = ({
-  recap,
-  status,
-  statusDisplay
-}) => {
+// Update props to accept the full conversation object (or relevant part)
+interface RecapViewProps {
+  conversation: Conversation | null;
+}
+
+const RecapView: React.FC<RecapViewProps> = ({ conversation }) => {
+  // Extract needed data from conversation prop
+  const recap = conversation?.recap_text;
+  const status = conversation?.status_recap;
+  const statusDisplay = conversation?.status_recap_display;
 
   const handleCopy = () => {
     if (recap) {
@@ -43,6 +48,15 @@ const RecapView: React.FC<RecapViewProps> = ({
 
   // Helper to render content based on status
   const renderContent = () => {
+    // Handle null conversation case first
+    if (!conversation) {
+        return (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <p>Conversation data not loaded.</p>
+          </div>
+        );
+    }
+    
     switch (status) {
       case 'pending':
       case 'processing':

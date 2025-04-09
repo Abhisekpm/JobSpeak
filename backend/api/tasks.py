@@ -8,6 +8,8 @@ from background_task import background # Import the background decorator
 from .services.transcription import DeepgramTranscriptionService
 from .services.recap import recap_interview # Corrected import name
 from .services.summary import summarize_transcript # Import the summary service
+from .services.analysis import analyze_conversation # Import the analysis service
+from .services.coaching import generate_coaching_feedback # Import the coaching service
 
 # Configure logging for tasks
 task_logger = logging.getLogger('background_tasks')
@@ -29,22 +31,41 @@ def process_transcription_task(conversation_id):
     if not conversation.audio_file:
         task_logger.warning(f"[Transcription Task] No audio file for Conversation ID: {conversation_id}. Marking failed.")
         conversation.status_transcription = Conversation.STATUS_FAILED
-        conversation.save(update_fields=['status_transcription', 'updated_at'])
+        # Mark downstream tasks as failed too
+        conversation.status_recap = Conversation.STATUS_FAILED
+        conversation.status_summary = Conversation.STATUS_FAILED
+        conversation.status_analysis = Conversation.STATUS_FAILED
+        conversation.status_coaching = Conversation.STATUS_FAILED
+        conversation.save(update_fields=['status_transcription', 'status_recap', 'status_summary', 'status_analysis', 'status_coaching', 'updated_at'])
         return
 
-    # Ensure recap status is pending if we start transcription
+    # Reset downstream statuses to PENDING when starting transcription
+    fields_to_update = ['status_transcription']
     if conversation.status_recap != Conversation.STATUS_PENDING:
         conversation.status_recap = Conversation.STATUS_PENDING
-        conversation.recap_text = None # Clear any old recap
-        conversation.save(update_fields=['status_recap', 'recap_text', 'updated_at'])
+        conversation.recap_text = None
+        fields_to_update.extend(['status_recap', 'recap_text'])
+    if conversation.status_summary != Conversation.STATUS_PENDING:
+        conversation.status_summary = Conversation.STATUS_PENDING
+        conversation.summary_data = {}
+        fields_to_update.extend(['status_summary', 'summary_data'])
+    if conversation.status_analysis != Conversation.STATUS_PENDING:
+        conversation.status_analysis = Conversation.STATUS_PENDING
+        conversation.analysis_results = None
+        fields_to_update.extend(['status_analysis', 'analysis_results'])
+    if conversation.status_coaching != Conversation.STATUS_PENDING:
+        conversation.status_coaching = Conversation.STATUS_PENDING
+        conversation.coaching_feedback = None
+        fields_to_update.extend(['status_coaching', 'coaching_feedback'])
 
     try:
-        # Mark as processing
+        # Mark transcription as processing
         conversation.status_transcription = Conversation.STATUS_PROCESSING
-        conversation.save(update_fields=['status_transcription', 'updated_at'])
+        fields_to_update.append('updated_at')
+        conversation.save(update_fields=fields_to_update)
         task_logger.info(f"[Transcription Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
 
-        # --- Call the Deepgram Service --- 
+        # --- Call the Deepgram Service ---
         audio_path = conversation.audio_file.path
         task_logger.info(f"[Transcription Task] Audio file path: {audio_path}")
 
@@ -72,7 +93,7 @@ def process_transcription_task(conversation_id):
         conversation.save(update_fields=['transcription_text', 'status_transcription', 'updated_at'])
         task_logger.info(f"[Transcription Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
 
-        # --- Trigger Recap Task --- 
+        # --- Trigger Recap Task ---
         task_logger.info(f"[Transcription Task] Scheduling recap task for Conversation ID: {conversation.id}")
         process_recap_task(conversation.id, schedule=5) # Schedule recap 5 seconds later
         # --------------------------
@@ -81,14 +102,17 @@ def process_transcription_task(conversation_id):
         task_logger.error(f"[Transcription Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
         try:
             conversation.status_transcription = Conversation.STATUS_FAILED
-            # Also mark recap as failed if transcription failed
+            # Also mark downstream as failed if transcription failed
             conversation.status_recap = Conversation.STATUS_FAILED
-            conversation.save(update_fields=['status_transcription', 'status_recap', 'updated_at'])
+            conversation.status_summary = Conversation.STATUS_FAILED
+            conversation.status_analysis = Conversation.STATUS_FAILED
+            conversation.status_coaching = Conversation.STATUS_FAILED
+            conversation.save(update_fields=['status_transcription', 'status_recap', 'status_summary', 'status_analysis', 'status_coaching', 'updated_at'])
             task_logger.info(f"[Transcription Task] Status set to FAILED for Conversation ID: {conversation.id}")
         except Exception as save_exc:
             task_logger.error(f"[Transcription Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
 
-# --- New Recap Task --- 
+# --- Recap Task ---
 @background(schedule=1)
 def process_recap_task(conversation_id):
     """
@@ -104,10 +128,13 @@ def process_recap_task(conversation_id):
     # Check if transcription was successful and text exists
     if conversation.status_transcription != Conversation.STATUS_COMPLETED or not conversation.transcription_text:
         task_logger.warning(f"[Recap Task] Transcription not completed or text missing for {conversation_id}. Aborting recap.")
-        # Optionally mark recap as failed or leave as pending?
         if conversation.status_recap == Conversation.STATUS_PENDING:
-             conversation.status_recap = Conversation.STATUS_FAILED # Mark failed if it depended on transcription
-             conversation.save(update_fields=['status_recap', 'updated_at'])
+             conversation.status_recap = Conversation.STATUS_FAILED
+             # Mark downstream tasks as failed
+             conversation.status_summary = Conversation.STATUS_FAILED
+             conversation.status_analysis = Conversation.STATUS_FAILED
+             conversation.status_coaching = Conversation.STATUS_FAILED
+             conversation.save(update_fields=['status_recap', 'status_summary', 'status_analysis', 'status_coaching', 'updated_at'])
         return
 
     try:
@@ -121,7 +148,7 @@ def process_recap_task(conversation_id):
             parsed_segments = json.loads(conversation.transcription_text)
             if not isinstance(parsed_segments, list):
                 raise ValueError("Parsed transcription is not a list")
-            # Format into a single string for the summarizer
+            # Format into a single string for the summarizer/recap
             formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             task_logger.error(f"[Recap Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
@@ -131,7 +158,7 @@ def process_recap_task(conversation_id):
              task_logger.warning(f"[Recap Task] Formatted transcript is empty for {conversation.id}. Skipping recap.")
              raise ValueError("Formatted transcript is empty")
 
-        # --- Call the Recap Service --- 
+        # --- Call the Recap Service ---
         task_logger.info(f"[Recap Task] Calling recap_interview service for Conversation ID: {conversation.id}")
         recap_result = recap_interview(formatted_transcript)
         # ------------------------------
@@ -146,27 +173,34 @@ def process_recap_task(conversation_id):
         conversation.save(update_fields=['recap_text', 'status_recap', 'updated_at'])
         task_logger.info(f"[Recap Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
 
-        # --- Trigger Summary Task --- 
-        # Ensure summary status is pending before triggering
+        # --- Trigger Downstream Tasks (Summary, Analysis, Coaching) ---
+        schedule_delay = 5 # seconds
         if conversation.status_summary == Conversation.STATUS_PENDING:
             task_logger.info(f"[Recap Task] Scheduling summary task for Conversation ID: {conversation.id}")
-            process_summary_task(conversation.id, schedule=5) # Schedule summary 5 seconds later
-        else:
-            task_logger.info(f"[Recap Task] Summary task not triggered for {conversation.id} as status is not PENDING ({conversation.status_summary})")
-        # --------------------------
+            process_summary_task(conversation.id, schedule=schedule_delay)
+        if conversation.status_analysis == Conversation.STATUS_PENDING:
+            task_logger.info(f"[Recap Task] Scheduling analysis task for Conversation ID: {conversation.id}")
+            process_analysis_task(conversation.id, schedule=schedule_delay)
+        if conversation.status_coaching == Conversation.STATUS_PENDING:
+            task_logger.info(f"[Recap Task] Scheduling coaching task for Conversation ID: {conversation.id}")
+            process_coaching_task(conversation.id, schedule=schedule_delay)
+        # ---------------------------------------------------------------
 
     except Exception as e:
         task_logger.error(f"[Recap Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
         try:
             conversation.status_recap = Conversation.STATUS_FAILED
-            # Also mark summary as failed if recap failed
-            conversation.status_summary = Conversation.STATUS_FAILED 
-            conversation.save(update_fields=['status_recap', 'status_summary', 'updated_at'])
+            # Also mark downstream as failed if recap failed
+            conversation.status_summary = Conversation.STATUS_FAILED
+            conversation.status_analysis = Conversation.STATUS_FAILED
+            conversation.status_coaching = Conversation.STATUS_FAILED
+            conversation.save(update_fields=['status_recap', 'status_summary', 'status_analysis', 'status_coaching', 'updated_at'])
             task_logger.info(f"[Recap Task] Status set to FAILED for Conversation ID: {conversation.id}")
         except Exception as save_exc:
             task_logger.error(f"[Recap Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
 
-# --- New Summary Task --- 
+
+# --- Summary Task ---
 @background(schedule=1)
 def process_summary_task(conversation_id):
     """
@@ -238,7 +272,7 @@ def process_summary_task(conversation_id):
                 task_logger.warning(f"[Summary Task] Failed to generate short summary for {conversation.id}. Proceeding with other results.")
                 # error_occurred = True # Decide if this should halt completion
 
-        # --- Update Model --- 
+        # --- Update Model ---
         conversation.summary_data = summary_results
         # Mark completed only if the crucial detailed/balanced summaries were generated
         if summary_results["detailed"] and summary_results["balanced"]:
@@ -248,7 +282,7 @@ def process_summary_task(conversation_id):
              # If the chain broke early, mark as failed
              conversation.status_summary = Conversation.STATUS_FAILED
              task_logger.error(f"[Summary Task] Summary chain failed (detailed or balanced summary missing). Status set to FAILED for Conversation ID: {conversation.id}")
-        
+
         conversation.save(update_fields=['summary_data', 'status_summary', 'updated_at'])
 
     except Exception as e:
@@ -257,8 +291,131 @@ def process_summary_task(conversation_id):
             # Ensure status is FAILED on any unexpected exception
             conversation.status_summary = Conversation.STATUS_FAILED
             # Optionally clear summary_data if it's partially filled and inconsistent
-            conversation.summary_data = summary_results if 'summary_results' in locals() else {} 
+            conversation.summary_data = summary_results if 'summary_results' in locals() else {}
             conversation.save(update_fields=['summary_data', 'status_summary', 'updated_at'])
             task_logger.info(f"[Summary Task] Status set to FAILED due to unexpected error for Conversation ID: {conversation.id}")
         except Exception as save_exc:
-            task_logger.error(f"[Summary Task] Could not mark as failed after unexpected error for Conversation ID {conversation.id}: {save_exc}") 
+            task_logger.error(f"[Summary Task] Could not mark as failed after unexpected error for Conversation ID {conversation.id}: {save_exc}")
+
+
+# --- NEW Analysis Task ---
+@background(schedule=1)
+def process_analysis_task(conversation_id):
+    """
+    Background task to generate conversation analysis (talk time, sentiment, topics).
+    Uses recap text as input.
+    """
+    task_logger.info(f"[Analysis Task] Starting process for Conversation ID: {conversation_id}")
+    try:
+        conversation = Conversation.objects.get(id=conversation_id)
+    except Conversation.DoesNotExist:
+        task_logger.error(f"[Analysis Task] Conversation ID {conversation_id} not found. Aborting.")
+        return
+
+    # Prerequisite: Recap must be completed and have text
+    if conversation.status_recap != Conversation.STATUS_COMPLETED or not conversation.recap_text:
+        task_logger.warning(f"[Analysis Task] Recap not completed or text missing for {conversation_id}. Aborting analysis.")
+        if conversation.status_analysis == Conversation.STATUS_PENDING:
+             conversation.status_analysis = Conversation.STATUS_FAILED
+             conversation.save(update_fields=['status_analysis', 'updated_at'])
+        return
+
+    try:
+        # Mark analysis as processing
+        conversation.status_analysis = Conversation.STATUS_PROCESSING
+        conversation.analysis_results = None # Clear old data
+        conversation.save(update_fields=['status_analysis', 'analysis_results', 'updated_at'])
+        task_logger.info(f"[Analysis Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
+
+        # --- Call the Analysis Service ---
+        task_logger.info(f"[Analysis Task] Calling analyze_conversation service for Conversation ID: {conversation.id}")
+        analysis_result = analyze_conversation(conversation.recap_text)
+        # -------------------------------
+
+        if analysis_result is None:
+            task_logger.error(f"[Analysis Task] Analysis service failed or returned None for {conversation.id}")
+            raise ValueError("Analysis service failed")
+
+        # Update model with results (analysis_result should be a dict/JSON compatible)
+        conversation.analysis_results = analysis_result
+        conversation.status_analysis = Conversation.STATUS_COMPLETED
+        conversation.save(update_fields=['analysis_results', 'status_analysis', 'updated_at'])
+        task_logger.info(f"[Analysis Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
+
+    except Exception as e:
+        task_logger.error(f"[Analysis Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
+        try:
+            conversation.status_analysis = Conversation.STATUS_FAILED
+            conversation.save(update_fields=['status_analysis', 'updated_at'])
+            task_logger.info(f"[Analysis Task] Status set to FAILED for Conversation ID: {conversation.id}")
+        except Exception as save_exc:
+            task_logger.error(f"[Analysis Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
+
+
+# --- NEW Coaching Task ---
+@background(schedule=1)
+def process_coaching_task(conversation_id):
+    """
+    Background task to generate coaching feedback.
+    Uses the formatted original transcript text as input.
+    """
+    task_logger.info(f"[Coaching Task] Starting process for Conversation ID: {conversation_id}")
+    try:
+        conversation = Conversation.objects.get(id=conversation_id)
+    except Conversation.DoesNotExist:
+        task_logger.error(f"[Coaching Task] Conversation ID {conversation_id} not found. Aborting.")
+        return
+
+    # Prerequisite: Transcription must be completed and have text
+    if conversation.status_transcription != Conversation.STATUS_COMPLETED or not conversation.transcription_text:
+        task_logger.warning(f"[Coaching Task] Transcription not completed or text missing for {conversation_id}. Aborting coaching.")
+        if conversation.status_coaching == Conversation.STATUS_PENDING:
+             conversation.status_coaching = Conversation.STATUS_FAILED
+             conversation.save(update_fields=['status_coaching', 'updated_at'])
+        return
+
+    try:
+        # Mark coaching as processing
+        conversation.status_coaching = Conversation.STATUS_PROCESSING
+        conversation.coaching_feedback = None # Clear old data
+        conversation.save(update_fields=['status_coaching', 'coaching_feedback', 'updated_at'])
+        task_logger.info(f"[Coaching Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
+
+        # Parse and format the stored JSON transcription
+        try:
+            parsed_segments = json.loads(conversation.transcription_text)
+            if not isinstance(parsed_segments, list):
+                raise ValueError("Parsed transcription is not a list")
+            # Format into a single string for the coaching service
+            formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            task_logger.error(f"[Coaching Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
+            raise ValueError(f"Invalid transcription format: {e}") # Propagate error
+
+        if not formatted_transcript.strip():
+             task_logger.warning(f"[Coaching Task] Formatted transcript is empty for {conversation.id}. Skipping coaching.")
+             raise ValueError("Formatted transcript is empty")
+
+        # --- Call the Coaching Service --- (Using formatted transcript)
+        task_logger.info(f"[Coaching Task] Calling generate_coaching_feedback service for Conversation ID: {conversation.id}")
+        feedback_result = generate_coaching_feedback(formatted_transcript)
+        # --------------------------------
+
+        if feedback_result is None:
+            task_logger.error(f"[Coaching Task] Coaching service failed or returned None for {conversation.id}")
+            raise ValueError("Coaching service failed")
+
+        # Update model with results (feedback_result should be a string)
+        conversation.coaching_feedback = feedback_result
+        conversation.status_coaching = Conversation.STATUS_COMPLETED
+        conversation.save(update_fields=['coaching_feedback', 'status_coaching', 'updated_at'])
+        task_logger.info(f"[Coaching Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
+
+    except Exception as e:
+        task_logger.error(f"[Coaching Task] Error during processing for Conversation ID {conversation.id}: {e}", exc_info=True)
+        try:
+            conversation.status_coaching = Conversation.STATUS_FAILED
+            conversation.save(update_fields=['status_coaching', 'updated_at'])
+            task_logger.info(f"[Coaching Task] Status set to FAILED for Conversation ID: {conversation.id}")
+        except Exception as save_exc:
+            task_logger.error(f"[Coaching Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}") 

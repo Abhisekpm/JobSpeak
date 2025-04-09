@@ -4,27 +4,33 @@ import { Button } from "./ui/button";
 import { Copy, Download, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"; // Import Tabs components
 
-// Define the structure for the summary data
+// Define the structure for the summary data within the conversation object
 interface SummaryData {
   short: string | null | undefined;
   balanced: string | null | undefined;
   detailed: string | null | undefined;
 }
 
-// Update props for the summary view
-interface SummaryViewProps {
-  summaryData: SummaryData | null | undefined;
-  status: string | null | undefined; // e.g., 'pending', 'processing', 'completed', 'failed'
-  statusDisplay: string | null | undefined; // e.g., 'Pending', 'Processing', ...
+// Define the minimal Conversation structure needed by this component
+interface Conversation {
+  summary_data: SummaryData | null;
+  status_summary: string;
+  status_summary_display: string;
 }
 
-const SummaryView: React.FC<SummaryViewProps> = ({
-  summaryData,
-  status,
-  statusDisplay
-}) => {
+// Update props to accept the full conversation object (or relevant part)
+interface SummaryViewProps {
+  conversation: Conversation | null;
+}
+
+const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
   // State to track the active inner summary tab
   const [activeTab, setActiveTab] = useState<keyof SummaryData>('balanced');
+
+  // Extract needed data from conversation prop
+  const summaryData = conversation?.summary_data;
+  const status = conversation?.status_summary;
+  const statusDisplay = conversation?.status_summary_display;
 
   // Get the text of the currently active tab
   const getActiveSummaryText = () => {
@@ -61,6 +67,15 @@ const SummaryView: React.FC<SummaryViewProps> = ({
 
   // Helper to render content based on status
   const renderContent = () => {
+    // Handle null conversation case first
+    if (!conversation) {
+        return (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <p>Conversation data not loaded.</p>
+          </div>
+        );
+    }
+    
     switch (status) {
       case 'pending':
       case 'processing':
@@ -71,11 +86,12 @@ const SummaryView: React.FC<SummaryViewProps> = ({
           </div>
         );
       case 'completed':
-        if (!summaryData) {
+        // Check specifically for summaryData within the loaded conversation
+        if (!summaryData || (!summaryData.short && !summaryData.balanced && !summaryData.detailed)) {
            return (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <CheckCircle className="h-8 w-8 text-green-500 mb-2" />
-               <p>Summary generated, but data is unavailable.</p>
+               <p>Summary generated, but data is unavailable or empty.</p>
             </div>
            );
         }
