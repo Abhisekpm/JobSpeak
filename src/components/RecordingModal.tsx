@@ -145,9 +145,29 @@ const RecordingModal = ({
     const file = event.target.files?.[0];
     if (file) {
       setUploadedFile(file);
-      // In a real implementation, we would process the audio file
-      // For now, we'll just set some mock data
-      setDuration(Math.floor(Math.random() * 180)); // Random duration between 0-180 seconds
+      // Reset duration while we calculate it
+      setDuration(0); 
+
+      // Calculate duration from the file
+      const audio = new Audio();
+      const objectUrl = URL.createObjectURL(file);
+
+      audio.addEventListener('loadedmetadata', () => {
+        const fileDuration = Math.round(audio.duration);
+        console.log(`Uploaded file duration: ${fileDuration} seconds`);
+        setDuration(fileDuration);
+        URL.revokeObjectURL(objectUrl); // Clean up URL
+      });
+
+      audio.addEventListener('error', (e) => {
+        console.error("Error loading uploaded audio file metadata:", e);
+        setDuration(0); // Reset duration on error
+        URL.revokeObjectURL(objectUrl); // Clean up URL
+         // Optional: Show toast to user about failure to get duration
+      });
+
+      // Set the source to trigger loading metadata
+      audio.src = objectUrl;
     }
   };
 
@@ -164,28 +184,20 @@ const RecordingModal = ({
         duration: duration,
       };
     } else if (activeTab === "upload" && uploadedFile) {
-      // For upload, we might want to pass the File object directly
-      // or read it as a Blob if the onSave handler expects a Blob
-      // Assuming onSave can handle a File for now, let's pass it as Blob for consistency
       const uploadedBlob = new Blob([uploadedFile], { type: uploadedFile.type });
       saveData = {
         title: title || uploadedFile.name,
-        audio: uploadedBlob, // Pass Blob
-        duration: duration, // Duration might need calculation for uploaded files
+        audio: uploadedBlob,
+        duration: duration, // Now uses the calculated duration
       };
     }
 
     if (saveData) {
       try {
         await onSave(saveData);
-        // Only reset and close if save was successful (onSave didn't throw)
-        // If onSave is not async or doesn't throw, this always runs
         resetState();
-        // onClose(); // Let parent handle closing after successful save
       } catch (error) {
-        // Error handled in parent (home.tsx)
         console.error("onSave handler threw an error:", error);
-        // Do not close the modal or reset state if onSave failed
       }
     }
   };
