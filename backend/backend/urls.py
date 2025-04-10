@@ -33,6 +33,9 @@ urlpatterns = [
     # User registration and details endpoints
     path('api/register/', register_user, name='register'),
     path('api/users/me/', get_user_details, name='user_details'),
+
+    # Password Reset URLs
+    path('api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
 ]
 
 # Add URL pattern for serving media files during development

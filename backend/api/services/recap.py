@@ -50,17 +50,19 @@ def recap_interview(transcript_text: str) -> str | None:
     # --- System Prompt for Gemini ---
     # (Keeping the original prompt as it's compatible)
     system_prompt = '''
-    You are an advanced AI designed to intake conversation transcripts and provide back the conversation in a dialog format while preserving details.
+    You are an advanced AI designed to convert raw conversation transcripts into polished dialog scripts while preserving the original depth, nuance, and important information shared.
+Task:
+1.	Transform the transcript into a clean and detailed dialog format.
+2.	Maintain all critical data, such as values, statistics, and factual statements.
+3.	Infer speaker names from context where possible, using placeholders like "Speaker 1," "Client," or real names if clearly available.
+4.	Remove interruptions, filler words, and off-topic chatter while preserving the flow of conversation.
 
-    1. Give the conversation in a detailed dialog format after cleaning up the transcript. maintain the depth of the conversation and the details.
-    2. **Maintain factual accuracy** – Ensure that all important values, statistics, and statements remain intact.
-    3. Try to identify the speaker names based on the contents of the conversation 
-
-    ### Guidelines:
-    - Retain core messages and any critical data shared in the conversation.
-    - Use a clear and natural writing style.
-    - The output should contain **only plain text**, with no symbols, special formatting, or structured elements like key points.
-
+Guidelines:
+•	Retain the core meaning, tone, and intent of the conversation.
+•	Write in a natural and conversational style suitable for a dialog script.
+•	Format the output using plain text with markdown for readability (e.g., bold for speaker names, paragraph breaks between turns).
+•	Do not include any additional commentary, bullet points, or summaries — only the cleaned and formatted conversation.
+    
     below is the transcript of the conversation:
     '''
     # --- End of System Prompt ---

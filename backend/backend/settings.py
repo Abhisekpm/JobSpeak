@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'background_task',
     'rest_framework_simplejwt',  # Add JWT authentication
+    'django_rest_passwordreset', # Add password reset app
 
     # Local apps
     'api',
@@ -138,6 +139,12 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     "http://localhost:3000", # Example: Allow your React frontend development server
 #     "http://127.0.0.1:3000",
 # ]
+
+# Email Configuration (for password reset)
+# Use console backend for development (prints emails to terminal)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Set a default sender address (required even for console backend)
+DEFAULT_FROM_EMAIL = 'noreply@jobspeak.local'
 
 # Add JWT authentication settings
 REST_FRAMEWORK = {
