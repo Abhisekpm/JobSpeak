@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import apiClient from "../lib/apiClient"; // Import the API client
+import Header from "./Header";
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
 import RecordingModal from "./RecordingModal";
 import SearchFilter from "./SearchFilter"; // Import the SearchFilter component
 import { Button } from "./ui/button"; // Added for error display
 import { toast } from "./ui/use-toast"; // Assuming use-toast is setup (from shadcn/ui)
+import { useAuth } from "../contexts/AuthContext"; // <-- Corrected path
 
 // Define a type for the conversation object matching the backend model/serializer
 interface Conversation {
@@ -21,7 +23,7 @@ interface Conversation {
   // Add Phase 3 fields
   status_transcription: string; // e.g., 'pending', 'processing', 'completed', 'failed'
   status_transcription_display: string; // e.g., 'Pending', 'Processing', ...
-  transcription_text: string | null;
+  transcription_text: unknown | null;
   // Add Recap/Summary fields (matching ConversationDetail)
   status_recap: string;
   status_recap_display: string;
@@ -242,38 +244,32 @@ const Home = () => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  // Helper function to create transcription preview
+  // Helper function to create transcription preview - Simplified
   const createTranscriptionPreview = (
-    text: string | null | undefined,
     status: string | undefined
   ): string => {
-    if (status === "processing" || status === "pending") {
-      return "Transcription processing...";
-    }
-    if (!text || text.trim() === "") {
-      if (status === "failed") {
-        return "Transcription failed.";
-      } else {
-        return "No transcription available."; // Or maybe just empty string?
+    switch (status) {
+        case 'processing':
+        case 'pending':
+          return "Processing...";
+        case 'completed':
+          // We know it's done, but don't have easy text access here
+          return "Transcription available."; 
+        case 'failed':
+          return "Transcription failed.";
+        default:
+          return "No transcription data.";
       }
-    }
-    const maxLength = 150; // Max characters for preview
-    if (text.length <= maxLength) {
-      return text;
-    }
-    return text.substring(0, maxLength) + "...";
+    // Removed old logic using text.trim() / text.substring()
   };
 
-  // --- Filtering Logic ---
+  // --- Filtering Logic --- Simplified
   const filteredConversations = conversations.filter((conv) => {
-    // 1. Search Term Filter (Name or Transcription)
+    // 1. Search Term Filter (Name only)
     const searchMatch =
       searchTerm === "" ||
-      conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (conv.transcription_text &&
-        conv.transcription_text
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()));
+      conv.name.toLowerCase().includes(searchTerm.toLowerCase());
+      // Removed search within conv.transcription_text
 
     if (!searchMatch) return false;
 
@@ -330,9 +326,6 @@ const Home = () => {
       if (!dateMatch) return false; // No selected date ranges matched
     }
 
-    // 3. Duration Filter (Removed)
-    // if (activeFilters.duration && activeFilters.duration.length > 0) { ... }
-
     // If all filters pass
     return true;
   });
@@ -340,57 +333,62 @@ const Home = () => {
   // --- Render Logic ---
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Search and Filter Bar */}
-      <div className="mb-6">
-        <SearchFilter
-          onSearchChange={handleSearchChange}
-          onFilter={handleFilterChange}
-        />
-      </div>
+    // Use a flex column layout for the overall page structure
+    <div className="flex flex-col min-h-screen">
+      {/* Render the Header at the top - it gets user info internally */}
+      <Header /> 
 
-      {/* Conversation Grid or Message */}
-      {isLoading ? (
-        <div className="text-center py-10">Loading conversations...</div>
-      ) : error ? (
-        <div className="text-center py-10 text-red-600">
-          <p>{error}</p>
-          <Button
-            onClick={() => window.location.reload()}
-            variant="outline"
-            className="mt-4"
-          >
-            Retry
-          </Button>
-        </div>
-      ) : filteredConversations.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {filteredConversations.map((conv) => (
-            <ConversationCard
-              key={conv.id}
-              id={String(conv.id)} // Convert id to string if needed by Card
-              title={conv.name}
-              date={formatDate(conv.created_at)}
-              duration={formatDuration(conv.duration)}
-              // Update prop name to match ConversationCard
-              previewText={
-                conv.summary_data?.short ??
-                createTranscriptionPreview(
-                  conv.transcription_text,
-                  conv.status_transcription
-                )
-              }
-              onDelete={() => handleDeleteConversation(conv.id)}
-              onClick={() => handleViewDetails(conv.id)}
+      {/* Main content area */}
+      <main className="container mx-auto px-4 py-8 flex-grow">
+          {/* Search and Filter Bar */}
+          <div className="mb-6">
+            <SearchFilter
+              onSearchChange={handleSearchChange}
+              onFilter={handleFilterChange}
             />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-10 text-gray-500">
-          No conversations found.
-        </div>
-      )}
+          </div>
 
+          {/* Conversation Grid or Message */}
+          {isLoading ? (
+            <div className="text-center py-10">Loading conversations...</div>
+          ) : error ? (
+            <div className="text-center py-10 text-red-600">
+              <p>{error}</p>
+              <Button
+                onClick={() => window.location.reload()} // Simple retry
+                variant="outline"
+                className="mt-4"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : filteredConversations.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {filteredConversations.map((conv) => (
+                <ConversationCard
+                  key={conv.id}
+                  id={String(conv.id)}
+                  title={conv.name}
+                  date={formatDate(conv.created_at)}
+                  duration={formatDuration(conv.duration)}
+                  previewText={
+                    conv.summary_data?.short ??
+                    // Pass only status to the simplified preview function
+                    createTranscriptionPreview(conv.status_transcription)
+                  }
+                  onDelete={() => handleDeleteConversation(conv.id)}
+                  onClick={() => handleViewDetails(conv.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              No conversations found.
+            </div>
+          )}
+      </main>
+        
+      {/* Modal and FAB are positioned fixed, so can be outside main */}
       <RecordingModal
         isOpen={isRecordingModalOpen}
         onClose={() => setIsRecordingModalOpen(false)}
@@ -398,7 +396,7 @@ const Home = () => {
         isSaving={isSaving}
       />
 
-      <FloatingActionButton onClick={() => setIsRecordingModalOpen(true)} />
+      <FloatingActionButton onFabClick={() => setIsRecordingModalOpen(true)} />
     </div>
   );
 };
