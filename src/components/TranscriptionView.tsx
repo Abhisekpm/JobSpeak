@@ -1,7 +1,7 @@
 import React from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { Copy, Download, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
+import { Copy, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
 
 // Define the structure of a single transcription segment
 // This should match the structure within the JSON blob from the backend
@@ -49,27 +49,6 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
           console.error("Failed to copy formatted transcription: ", err);
           // Optional: show error toast
         });
-    }
-  };
-
-  // Placeholder for export functionality
-  const handleExport = () => {
-    const textToExport = formatForCopy(transcription);
-    if (textToExport) {
-         // Basic TXT download implementation
-         const blob = new Blob([textToExport], { type: 'text/plain' });
-         const url = URL.createObjectURL(blob);
-         const a = document.createElement('a');
-         a.href = url;
-         a.download = 'transcription.txt';
-         document.body.appendChild(a);
-         a.click();
-         document.body.removeChild(a);
-         URL.revokeObjectURL(url);
-         console.log("Exporting formatted transcription as text file.");
-    } else {
-         console.log("No valid transcription data to export.");
-         // Optional: show info toast
     }
   };
 
@@ -124,8 +103,8 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
     }
   };
 
-  // Update check: Can copy/export if status is completed and parsed transcription exists and is not empty
-  const canCopyOrExport = status === 'completed' && transcription && transcription.length > 0;
+  // Rename variable and update condition
+  const canCopy = status === 'completed' && transcription && transcription.length > 0;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 w-full h-full flex flex-col">
@@ -133,13 +112,9 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
       <div className="flex justify-between items-center mb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold">Conversation Transcript</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopyOrExport}>
+          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopy}>
             <Copy className="h-4 w-4 mr-2" />
             Copy
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={!canCopyOrExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
           </Button>
         </div>
       </div>

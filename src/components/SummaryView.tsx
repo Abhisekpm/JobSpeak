@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { Copy, Download, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
+import { Copy, Loader2, AlertTriangle, CheckCircle } from "lucide-react"; // Icons for status
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"; // Import Tabs components
 
 // Define the structure for the summary data within the conversation object
@@ -44,24 +44,6 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
       navigator.clipboard.writeText(textToCopy)
         .then(() => { console.log(`Summary (${activeTab}) copied to clipboard!`); })
         .catch(err => { console.error(`Failed to copy summary (${activeTab}): `, err); });
-    }
-  };
-
-  const handleExport = () => {
-     const textToExport = getActiveSummaryText();
-     if (textToExport) {
-         const blob = new Blob([textToExport], { type: 'text/plain' });
-         const url = URL.createObjectURL(blob);
-         const a = document.createElement('a');
-         a.href = url;
-         a.download = `summary-${activeTab}.txt`; // Include tab type in filename
-         document.body.appendChild(a);
-         a.click();
-         document.body.removeChild(a);
-         URL.revokeObjectURL(url);
-         console.log(`Exporting summary (${activeTab}) as text file.`);
-    } else {
-         console.log(`No summary data (${activeTab}) to export.`);
     }
   };
 
@@ -150,7 +132,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
   };
 
   const activeSummaryText = getActiveSummaryText();
-  const canCopyOrExport = status === 'completed' && activeSummaryText && activeSummaryText.trim() !== '';
+  const canCopy = status === 'completed' && activeSummaryText && activeSummaryText.trim() !== '';
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 w-full h-full flex flex-col">
@@ -158,13 +140,9 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
       <div className="flex justify-between items-center mb-2 flex-shrink-0">
         <h2 className="text-xl font-semibold">Summary</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopyOrExport}>
+          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopy}>
             <Copy className="h-4 w-4 mr-2" />
             Copy
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={!canCopyOrExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
           </Button>
         </div>
       </div>

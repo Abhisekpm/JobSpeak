@@ -8,9 +8,16 @@ import TranscriptionView from "./TranscriptionView";
 import AnalysisPanel from "./AnalysisPanel";
 import RecapView from "./RecapView"; // Import the new RecapView component
 import SummaryView from "./SummaryView"; // Import the new SummaryView component
-import { ArrowLeft, Share2, Download, Play, Pause } from "lucide-react";
+import CoachingView from "./CoachingView"; // Import the new CoachingView component
+import { ArrowLeft, Share2, Download, Play, Pause, MoreHorizontal } from "lucide-react";
 import { toast } from "./ui/use-toast"; // Import toast
 import { Loader2, AlertTriangle, Info } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
 interface TranscriptionSegment {
@@ -64,6 +71,9 @@ const ConversationDetail: React.FC = () => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<string>("transcript"); 
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -527,15 +537,56 @@ const ConversationDetail: React.FC = () => {
 
       {/* Tabs for Views */}
       {/* Set default tab to 'transcript' */}
-      <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden min-h-0">
-        {/* Use flex-wrap for responsiveness instead of fixed grid, increase bottom margin */}
-        <TabsList className="flex flex-wrap justify-start gap-2 mb-6 shrink-0">
-          {/* Reordered and Renamed TabsTrigger components */}
-          <TabsTrigger value="transcript">Transcript</TabsTrigger>
-          <TabsTrigger value="recap">Recap</TabsTrigger>
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="coaching">Coaching</TabsTrigger>
-          <TabsTrigger value="analysis">Analysis</TabsTrigger>
+      <Tabs 
+        value={activeTab} 
+        onValueChange={setActiveTab} 
+        className="flex-1 flex flex-col overflow-hidden min-h-0"
+      >
+        {/* Use justify-between to push dropdown to the right */}
+        <TabsList className="flex justify-between items-center gap-2 mb-6 shrink-0">
+          {/* Visible Tabs */}
+          <div className="flex items-center gap-2">
+            <TabsTrigger value="transcript">Transcript</TabsTrigger>
+            <TabsTrigger value="recap">Recap</TabsTrigger>
+            {/* Make Summary always visible */}
+            <TabsTrigger value="summary">Summary</TabsTrigger> 
+            {/* Hidden on small screens, visible on medium and up */}
+            <TabsTrigger value="coaching" className="hidden md:inline-flex">Coaching</TabsTrigger>
+            <TabsTrigger value="analysis" className="hidden md:inline-flex">Analysis</TabsTrigger>
+          </div>
+
+          {/* Dropdown Menu - Visible only on small screens */}
+          <div className="md:hidden"> {/* Hide on medium screens and up */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">More tabs</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {/* Remove Summary from dropdown */}
+                {/* <DropdownMenuItem 
+                  onSelect={() => setActiveTab('summary')} 
+                  disabled={activeTab === 'summary'}
+                >
+                  Summary
+                </DropdownMenuItem> */}
+                <DropdownMenuItem 
+                  onSelect={() => setActiveTab('coaching')} 
+                  disabled={activeTab === 'coaching'}
+                >
+                  Coaching
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onSelect={() => setActiveTab('analysis')} 
+                  disabled={activeTab === 'analysis'}
+                >
+                  Analysis
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </TabsList>
 
         {/* Content sections remain - order in code doesn't affect display */}
@@ -544,24 +595,7 @@ const ConversationDetail: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="coaching" className="flex-1 overflow-auto">
-             <Card className="p-4 h-full overflow-y-auto">
-                 <h3 className="font-semibold mb-2 text-lg">Coaching Feedback</h3>
-                 {conversation.status_coaching === 'pending' || conversation.status_coaching === 'processing' ? (
-                     <div className="flex items-center justify-center h-32 text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Processing...
-                     </div>
-                 ) : conversation.status_coaching === 'failed' ? (
-                     <div className="flex items-center justify-center h-32 text-destructive">
-                         <AlertTriangle className="h-6 w-6 mr-2" /> Failed to generate coaching feedback.
-                     </div>
-                 ) : conversation.coaching_feedback ? (
-                     <p className="whitespace-pre-wrap text-sm leading-relaxed">{conversation.coaching_feedback}</p>
-                 ) : (
-                     <div className="flex items-center justify-center h-32 text-muted-foreground">
-                        <Info className="h-6 w-6 mr-2" /> Coaching feedback not available.
-                     </div>
-                 )}
-             </Card>
+             <CoachingView conversation={conversation} />
         </TabsContent>
 
         <TabsContent value="recap" className="flex-1 overflow-auto">

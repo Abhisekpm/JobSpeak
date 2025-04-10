@@ -24,7 +24,6 @@ export default defineConfig({
     port: 5173,        // Keeps Vite on the same port
     strictPort: true,  // Prevents port switching
     cors: true,        // Allows cross-origin access
-    allowedHosts: ["60a4-2601-41-cc80-1820-1da4-71bc-8149-4332.ngrok-free.app", "localhost", "127.0.0.1"],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -32,6 +31,11 @@ export default defineConfig({
         secure: false,
       },
       '/media': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/admin': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,

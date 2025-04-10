@@ -4,6 +4,8 @@ import { Toaster } from './components/ui/toaster';
 import { AuthProvider } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import RequestPasswordResetPage from './pages/RequestPasswordResetPage';
+import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
 import Home from './components/Home'; 
@@ -22,6 +24,8 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<RequestPasswordResetPage />} />
+          <Route path="/reset-password-confirm/:token" element={<ResetPasswordConfirmPage />} />
           
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
