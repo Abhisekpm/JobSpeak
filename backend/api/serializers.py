@@ -13,11 +13,14 @@ class ConversationSerializer(serializers.ModelSerializer):
     status_summary_display = serializers.CharField(source='get_status_summary_display', read_only=True)
     status_analysis_display = serializers.CharField(source='get_status_analysis_display', read_only=True)
     status_coaching_display = serializers.CharField(source='get_status_coaching_display', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = Conversation
         fields = [
             'id',
+            'user',
+            'username',
             'name',
             'created_at',
             'updated_at',
@@ -42,11 +45,13 @@ class ConversationSerializer(serializers.ModelSerializer):
             'coaching_feedback',
         ]
         read_only_fields = [
-            'id', 
-            'created_at', 
-            'updated_at', 
-            'audio_file_url', 
-            'status_transcription', 
+            'id',
+            'user',
+            'username',
+            'created_at',
+            'updated_at',
+            'audio_file_url',
+            'status_transcription',
             'status_transcription_display',
             'transcription_text',
             'status_recap',

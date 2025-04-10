@@ -1,10 +1,11 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Conversation
-from .serializers import ConversationSerializer, UserSerializer
+from .serializers import ConversationSerializer, UserSerializer, ConversationCreateSerializer
+from .permissions import IsOwner
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from .tasks import process_transcription_task
@@ -38,34 +39,57 @@ def get_user_details(request):
 # Modify conversation views to use authentication
 class ConversationViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows conversations to be viewed or edited.
+    API endpoint that allows conversations to be viewed or edited by the owner.
     Handles file uploads (audio_file) via multipart/form-data.
     Ensures associated audio file is deleted when a conversation is deleted.
+    Filters results based on the authenticated user.
     """
-    queryset = Conversation.objects.all().order_by('-created_at') # Get all, newest first
+    # Add a default queryset for the router, get_queryset will override for requests
+    queryset = Conversation.objects.none() 
     serializer_class = ConversationSerializer
-    parser_classes = (MultiPartParser, FormParser, JSONParser) # Add parsers for file uploads and JSON
-    permission_classes = [IsAuthenticated]  # Add permission class
-    
-    def get_queryset(self):
-        # Filter conversations by current user
-        return Conversation.objects.all()  # For now, return all - in a real app, filter by user
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+    # Apply IsOwner permission in get_object if needed, or rely on queryset filtering
 
-    # Override perform_create to enqueue transcription task
+    def get_queryset(self):
+        """Filter conversations to only those owned by the requesting user."""
+        user = self.request.user
+        if user.is_authenticated:
+            return Conversation.objects.filter(user=user).order_by('-created_at')
+        # Return an empty queryset if user is not authenticated (though IsAuthenticated should prevent this)
+        return Conversation.objects.none()
+
+    def get_serializer_class(self):
+        """Use ConversationCreateSerializer for create action."""
+        if self.action == 'create':
+            return ConversationCreateSerializer
+        return ConversationSerializer
+
     def perform_create(self, serializer):
-        """Save instance and then enqueue transcription task if audio exists."""
-        instance = serializer.save()
-        print(f"Saved new Conversation with ID: {instance.id}")
+        """Save instance, associate user, and then enqueue transcription task."""
+        # Associate the logged-in user with the new conversation
+        instance = serializer.save(user=self.request.user)
+        print(f"Saved new Conversation with ID: {instance.id} for user: {self.request.user.username}")
 
         if instance.audio_file:
             print(f"Scheduling background transcription task for Conversation ID: {instance.id}")
-            # Schedule the task using django-background-tasks
-            process_transcription_task(instance.id) # Just call the function
-            # Note: Status is initially PENDING by model default
+            process_transcription_task(instance.id)
         else:
             print(f"No audio file uploaded for Conversation ID: {instance.id}. Transcription not triggered.")
             instance.status_transcription = Conversation.STATUS_FAILED
-            instance.save(update_fields=['status_transcription'])
+            # Add other downstream statuses to failed if needed
+            instance.status_recap = Conversation.STATUS_FAILED
+            instance.status_summary = Conversation.STATUS_FAILED
+            instance.status_analysis = Conversation.STATUS_FAILED
+            instance.status_coaching = Conversation.STATUS_FAILED
+            instance.save(update_fields=[
+                'status_transcription', 
+                'status_recap', 
+                'status_summary',
+                'status_analysis',
+                'status_coaching',
+                'updated_at'
+            ])
 
     # Override destroy to delete the associated audio file
     def perform_destroy(self, instance):

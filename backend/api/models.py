@@ -1,11 +1,14 @@
 from django.db import models
 from django.utils import timezone
 import os
+from django.conf import settings # Import settings to get AUTH_USER_MODEL
 
 # Define a dynamic path for uploaded audio files
 def conversation_audio_path(instance, filename):
-    # File will be uploaded to MEDIA_ROOT/conversations/<id>/<filename>
-    return f'conversations/{instance.id}/{filename}'
+    # File will be uploaded to MEDIA_ROOT/conversations/<user_id>/<convo_id>/<filename>
+    # Ensure instance.user_id exists when this is called (usually after initial save if user is set)
+    user_id_folder = instance.user.id if instance.user else 'anonymous'
+    return f'conversations/{user_id_folder}/{instance.id}/{filename}'
 
 class Conversation(models.Model):
     # --- Status Definitions ---
@@ -23,6 +26,14 @@ class Conversation(models.Model):
     ]
 
     # --- Core Fields ---
+    # Link to the user who owns this conversation
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE, # Delete conversations if user is deleted
+        related_name='conversations',
+        null=False, # Must be associated with a user
+        blank=False
+    )
     name = models.CharField(max_length=255, blank=True, default='Untitled Conversation')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -87,7 +98,8 @@ class Conversation(models.Model):
 
     # --- String Representation ---
     def __str__(self):
-        return f"Conversation {self.id} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+        user_info = self.user.username if self.user else 'No User'
+        return f"Conversation {self.id} by {user_info} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
 
     # --- Status Display Properties ---
     @property
