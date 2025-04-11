@@ -28,8 +28,8 @@ def process_transcription_task(conversation_id):
         task_logger.error(f"[Transcription Task] Conversation ID {conversation_id} not found. Aborting.")
         return
 
-    if not conversation.audio_file:
-        task_logger.warning(f"[Transcription Task] No audio file for Conversation ID: {conversation_id}. Marking failed.")
+    if not conversation.audio_file or not conversation.audio_file.name:
+        task_logger.warning(f"[Transcription Task] No audio file or file name for Conversation ID: {conversation.id}. Marking failed.")
         conversation.status_transcription = Conversation.STATUS_FAILED
         # Mark downstream tasks as failed too
         conversation.status_recap = Conversation.STATUS_FAILED
@@ -65,22 +65,28 @@ def process_transcription_task(conversation_id):
         conversation.save(update_fields=fields_to_update)
         task_logger.info(f"[Transcription Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
 
-        # --- Call the Deepgram Service ---
-        audio_path = conversation.audio_file.path
-        task_logger.info(f"[Transcription Task] Audio file path: {audio_path}")
+        # --- Get the S3 URL for the audio file --- 
+        try:
+            audio_url = conversation.audio_file.url # This should now be the public S3 URL
+            task_logger.info(f"[Transcription Task] Audio file URL: {audio_url}")
+        except Exception as url_err:
+            task_logger.error(f"[Transcription Task] Could not get audio file URL for {conversation.id}: {url_err}")
+            raise # Re-raise to mark transcription as failed
+        # -------------------------------------------
 
         deepgram_options = {
-            'model': 'nova-2',        # Example model
-            'language': 'en-US',     # Example language
+            'model': 'nova-2',
+            'language': 'en-US',
             'punctuate': True,
-            'diarize': True,        # Enable diarization to get speaker labels
-            'utterances': True,     # Keep utterances enabled, might be useful
-            'smart_format': True,   # Keep smart format enabled
+            'diarize': True,
+            'utterances': True,
+            'smart_format': True,
         }
 
         service = DeepgramTranscriptionService()
-        task_logger.info(f"[Transcription Task] Calling Deepgram service with options: {deepgram_options}")
-        structured_transcription_result = service.get_full_transcript(audio_path, **deepgram_options)
+        task_logger.info(f"[Transcription Task] Calling Deepgram service with URL and options: {deepgram_options}")
+        # Pass the URL to the service method
+        structured_transcription_result = service.get_full_transcript(audio_url=audio_url, **deepgram_options)
         # ----------------------------------
 
         if not structured_transcription_result:

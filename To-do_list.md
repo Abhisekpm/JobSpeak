@@ -145,3 +145,31 @@
 - [ ] Set up static file serving for Django admin (if used) and collected static files
 - [ ] Choose and configure a WSGI server (e.g., Gunicorn)
 - [ ] Choose and configure a web server/proxy (e.g., Nginx)
+
+## Phase 6: Cloud Media Storage (AWS S3)
+
+### Backend (Django)
+- [x] Install Required Libraries (`pip install django-storages[boto3] boto3`)
+- [x] Add `'storages'` to `INSTALLED_APPS` in `settings.py`
+- [x] Configure AWS Credentials (IAM Role, Environment Variables, or Shared File - **avoid hardcoding**) - *Used .env file*
+- [x] Configure S3 Storage Settings in `settings.py`:
+    - [x] Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (via env vars)
+    - [x] Set `AWS_STORAGE_BUCKET_NAME` (via env vars)
+    - [x] Set `AWS_S3_REGION_NAME` (via env vars)
+    - [x] Set `AWS_S3_CUSTOM_DOMAIN` (or use default)
+    - [x] Set `AWS_S3_OBJECT_PARAMETERS` (e.g., Cache-Control)
+    - [x] Set `AWS_LOCATION` (optional subdirectory for media)
+    - [x] Set `MEDIA_URL` using S3 domain/location
+    - [x] Set `DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'`
+    - [x] Configured for Public Read (Option 2): Set `AWS_DEFAULT_ACL = None`, `AWS_QUERYSTRING_AUTH = False`
+- [x] Configure S3 Bucket Policy for public read access (`s3:GetObject` for `media/*`).
+- [x] Configure S3 Bucket CORS Policy to allow GET/HEAD requests from frontend origin(s) (`http://localhost:5173`).
+- [x] *(Optional)* Review `conversation_audio_path` in `models.py` for compatibility (likely okay). - *No changes needed*
+- [x] Test uploading files and verify they appear in the S3 bucket. - *Required workaround in `views.py::perform_create` to explicitly use `S3Boto3Storage`*
+- [x] Test accessing files via the S3 URL returned by the API (check for CORS errors). - *Works with public S3 URL and CORS policy*
+- [x] **Update `perform_destroy` in `views.py` to explicitly delete from S3 using `S3Boto3Storage`.** (Completed)
+- [x] **Update background tasks (`tasks.py`, `services/transcription.py`) to use S3 URL (`.url`) instead of local path (`.path`).** (Completed)
+
+### Frontend (React)
+- [x] No specific code changes *required* as backend returns the correct public S3 URL.
+- [x] Verify audio player works correctly with S3 URLs. - *Works*

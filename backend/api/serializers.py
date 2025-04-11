@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Conversation  # Remove Message import
+from django.conf import settings
+from storages.backends.s3boto3 import S3Boto3Storage # Ensure imported
 
 User = get_user_model()
 
@@ -69,10 +71,15 @@ class ConversationSerializer(serializers.ModelSerializer):
         ]
 
     def get_audio_file_url(self, obj):
-        request = self.context.get('request')
-        if obj.audio_file and request:
-            # Use build_absolute_uri to get the full URL including domain
-            return request.build_absolute_uri(obj.audio_file.url)
+        # Revert to simple URL property access
+        # Assumes the URL is publicly accessible due to S3 bucket policy
+        if obj.audio_file and hasattr(obj.audio_file, 'url'):
+            try:
+                # Just return the direct S3 URL
+                return obj.audio_file.url
+            except Exception as e:
+                print(f"ERROR generating S3 URL for {obj.audio_file.name}: {e}")
+                return None
         return None
 
 class ConversationCreateSerializer(serializers.ModelSerializer):

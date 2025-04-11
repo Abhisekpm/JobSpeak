@@ -10,11 +10,19 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os # Import os module
 from pathlib import Path
+from datetime import timedelta # Keep existing timedelta import
+# from storages.backends.s3boto3 import S3Boto3Storage # Can likely remove this too if not used elsewhere directly
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --- Load .env file if python-dotenv is installed --- 
+# Optional: Consider adding python-dotenv to requirements.txt
+from dotenv import load_dotenv
+load_dotenv(BASE_DIR / '.env') 
+# --- End .env loading --- 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -44,6 +52,7 @@ INSTALLED_APPS = [
     'background_task',
     'rest_framework_simplejwt',  # Add JWT authentication
     'django_rest_passwordreset', # Add password reset app
+    'storages', # Add django-storages
 
     # Local apps
     'api',
@@ -126,11 +135,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
-# Add settings for Media files (user-uploaded content)
-MEDIA_URL = '/media/' # URL prefix for media files
-# Absolute filesystem path to the directory that will hold user-uploaded files.
-# Example: "/home/media/media.lawrence.com/media/"
-MEDIA_ROOT = BASE_DIR / 'media' # Store media files in a 'media' directory at the project root
+# Keep MEDIA_ROOT for potential local fallbacks or other uses, but S3 will be default
+MEDIA_ROOT = BASE_DIR / 'media' 
+# MEDIA_URL will be overridden by S3 settings below
 
 # CORS Settings (Allow all origins for development)
 CORS_ALLOW_ALL_ORIGINS = True
@@ -146,6 +153,40 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Set a default sender address (required even for console backend)
 DEFAULT_FROM_EMAIL = 'noreply@jobspeak.local'
 
+# --- AWS S3 Storage Configuration --- 
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
+
+if AWS_STORAGE_BUCKET_NAME:
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    AWS_LOCATION = 'media'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
+    
+    # Use S3 backend (string path is fine)
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage' 
+    
+    # --- Settings for Public Read Bucket (Option 2) ---
+    # Set ACL to None even for public buckets if ACLs are disabled on the bucket
+    AWS_DEFAULT_ACL = None # Do not attempt to set ACLs during upload
+    AWS_S3_FILE_OVERWRITE = False 
+    AWS_QUERYSTRING_AUTH = False # Do NOT generate presigned URLs
+    # --- End Public Read Bucket Settings ---
+    
+else:
+    print("WARNING: AWS S3 settings not configured in environment. Falling back to local media storage.")
+    MEDIA_URL = '/media/'
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+# --- End AWS S3 Configuration --- 
+
+# --- DEBUG: Check final DEFAULT_FILE_STORAGE value --- 
+# print(f"DEBUG: Final DEFAULT_FILE_STORAGE = {locals().get('DEFAULT_FILE_STORAGE', 'Not Set')}") # REMOVE
+# --- End DEBUG --- 
+
 # Add JWT authentication settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -153,7 +194,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),

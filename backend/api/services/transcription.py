@@ -1,6 +1,6 @@
 import time
 from ..models import Conversation # Adjust import based on new location
-from deepgram import DeepgramClient, PrerecordedOptions
+from deepgram import DeepgramClient, PrerecordedOptions, FileSource, UrlSource
 import dotenv
 import os
 import json
@@ -13,24 +13,23 @@ class DeepgramTranscriptionService:
             raise ValueError("Deepgram API key is required")
         self.client = DeepgramClient(self.api_key)
     
-    def transcribe(self, audio_path, **kwargs):
+    def transcribe(self, audio_url: str, **kwargs):
         try:
             options = PrerecordedOptions(
                 model=kwargs.get('model', 'nova-3'),
-                language=kwargs.get('language', 'en'),
+                language=kwargs.get('language', 'en-US'),
                 smart_format=kwargs.get('smart_format', True),
                 punctuate=kwargs.get('punctuate', True),
                 utterances=kwargs.get('utterances', True),
                 diarize=kwargs.get('diarize', True),
             )
             
-            with open(audio_path, "rb") as audio:
-                source = {"buffer": audio.read()}
-                response = self.client.listen.prerecorded.v("1").transcribe_file(source, options)
+            source: UrlSource = {"url": audio_url}
+            response = self.client.listen.prerecorded.v("1").transcribe_url(source, options)
             
             return response
         except Exception as e:
-            print(f"Transcription error: {e}")
+            print(f"Transcription error for URL {audio_url}: {e}")
             raise
     
     def clean_transcription(self, response):
@@ -100,8 +99,8 @@ class DeepgramTranscriptionService:
 
         return segments
     
-    def get_full_transcript(self, audio_path, **kwargs):
-        response = self.transcribe(audio_path, **kwargs)
+    def get_full_transcript(self, audio_url: str, **kwargs):
+        response = self.transcribe(audio_url=audio_url, **kwargs)
         # clean_transcription now returns the structured list of segments
         structured_transcript = self.clean_transcription(response) 
         # Return the structured data directly
