@@ -16,6 +16,7 @@ interface AuthContextType {
   login: (identifier: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  handleSuccessfulAuth: (user: User, accessToken: string, refreshToken: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,35 +54,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuth();
   }, []);
 
+  // --- Function to handle setting auth state after successful login/auth --- 
+  const handleSuccessfulAuth = (userData: User, accessToken: string, refreshToken: string) => {
+    localStorage.setItem('access_token', accessToken);
+    localStorage.setItem('refresh_token', refreshToken);
+    setUser(userData);
+    setIsAuthenticated(true);
+    // Optional: Re-initialize apiClient interceptors if needed immediately
+    // apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    console.log("Auth state updated successfully.", userData);
+    navigate('/'); // Navigate to home page
+  };
+
   const login = async (identifier: string, password: string) => {
     try {
-      console.log("Attempting login with identifier:", identifier);
-      
-      // Send credentials using the username field
-      // Our backend will handle email detection
       const response = await apiClient.post('/token/', { 
-        username: identifier, // Can be either email or username
+        username: identifier, 
         password: password
       });
-      
-      console.log("Login response:", response.data);
-      
       const { access, refresh } = response.data;
       
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-      
-      // Get user info
+      // Get user info (needed to pass to handleSuccessfulAuth)
       const userResponse = await apiClient.get('/users/me/');
-      setUser(userResponse.data);
-      setIsAuthenticated(true);
+      const userData = userResponse.data;
       
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
+      // Call the common handler
+      handleSuccessfulAuth(userData, access, refresh);
       
-      navigate('/');
+      // Remove toast here, let handleSuccessfulAuth potentially handle it if needed
+      // toast({ title: "Login successful", description: "Welcome back!" });
+      
     } catch (error) {
       console.error("Login error:", error);
       toast({
@@ -96,12 +98,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (username: string, email: string, password: string) => {
     try {
       await apiClient.post('/register/', { username, email, password });
-      toast({
-        title: "Registration successful",
-        description: "Please log in with your new account.",
-      });
-      // Auto-login after registration
-      await login(email, password);
+      toast({ title: "Registration successful", description: "Please log in." });
+      // Don't auto-login here anymore, let user log in manually or via Google
+      // await login(email, password);
+      navigate('/login'); // Redirect to login after registration
     } catch (error) {
       toast({
         title: "Registration failed",
@@ -117,10 +117,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('refresh_token');
     setIsAuthenticated(false);
     setUser(null);
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    });
     navigate('/login');
   };
 
@@ -131,6 +127,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     login,
     register,
     logout,
+    handleSuccessfulAuth,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

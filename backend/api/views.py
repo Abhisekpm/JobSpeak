@@ -11,6 +11,9 @@ from django.core.files.storage import default_storage
 from .tasks import process_transcription_task
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -160,3 +163,69 @@ class ConversationViewSet(viewsets.ModelViewSet):
     #     # Add logic here to process instance.audio_file if needed
     #     # instance.duration = calculate_duration(instance.audio_file)
     #     # instance.save()
+
+# --- Google Authentication View ---
+@api_view(['POST'])
+@permission_classes([AllowAny]) # Allow anyone to attempt Google login
+def google_login_callback(request):
+    """
+    Receives Google ID token from frontend, verifies it,
+    finds or creates a user, and returns JWT tokens.
+    """
+    google_token = request.data.get('access_token') # Token sent from frontend
+    if not google_token:
+        return Response({'error': 'Google token not provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Verify the token with Google
+        idinfo = id_token.verify_oauth2_token(
+            google_token, 
+            google_requests.Request(), 
+            settings.GOOGLE_CLIENT_ID 
+        )
+
+        email = idinfo.get('email')
+        first_name = idinfo.get('given_name')
+        last_name = idinfo.get('family_name')
+
+        if not email:
+            return Response({'error': 'Email not found in Google token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            username = email
+            if User.objects.filter(username=username).exists():
+                print(f"ERROR: Username '{username}' derived from email already exists.")
+                return Response({'error': f'An account with the username {username} already exists. Please log in normally or contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            user = User.objects.create_user(
+                username=username, 
+                email=email,
+                first_name=first_name or '',
+                last_name=last_name or '',
+                password=None 
+            )
+
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+
+        return Response({
+            'access': access_token,
+            'refresh': refresh_token,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            }
+        }, status=status.HTTP_200_OK)
+
+    except ValueError as e:
+        print(f"ERROR: Google token verification failed: {e}")
+        return Response({'error': f'Invalid Google token: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print(f"ERROR: An unexpected error occurred during Google login: {e}")
+        return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- End Google Authentication View ---

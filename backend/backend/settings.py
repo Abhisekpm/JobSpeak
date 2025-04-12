@@ -45,14 +45,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites', # Required by allauth
 
     # Third-party apps
     'rest_framework',
     'corsheaders',
     'background_task',
-    'rest_framework_simplejwt',  # Add JWT authentication
-    'django_rest_passwordreset', # Add password reset app
-    'storages', # Add django-storages
+    'rest_framework_simplejwt',
+    'django_rest_passwordreset',
+    'storages',
+    'allauth', # Core allauth app
+    'allauth.account', # Account management
+    'allauth.socialaccount', # Social account management
+    'allauth.socialaccount.providers.google', # Google provider
 
     # Local apps
     'api',
@@ -67,6 +72,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware', # Add allauth middleware
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -78,7 +84,8 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                'django.template.context_processors.request',
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request', # REQUIRED by allauth
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -153,6 +160,12 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Set a default sender address (required even for console backend)
 DEFAULT_FROM_EMAIL = 'noreply@jobspeak.local'
 
+# --- Google OAuth Credentials (Read from Env) --- 
+# Define these before SOCIALACCOUNT_PROVIDERS uses them
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+# --- End Google OAuth Credentials --- 
+
 # --- AWS S3 Storage Configuration --- 
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -206,3 +219,41 @@ SIMPLE_JWT = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Add Authentication Backends
+AUTHENTICATION_BACKENDS = [
+    # Needed to login by username in Django admin, regardless of `allauth`
+    'django.contrib.auth.backends.ModelBackend',
+    # `allauth` specific authentication methods, e.g. login by e-mail
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# Site ID required by allauth
+SITE_ID = 1
+
+# --- Allauth Settings --- 
+ACCOUNT_EMAIL_VERIFICATION = 'optional' # Or 'mandatory' or 'none'
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email' # Allow login with username or email
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = True # Set based on your user model needs
+# Ensure this matches your frontend URLs if using allauth views
+# LOGIN_REDIRECT_URL = '/' 
+# LOGOUT_REDIRECT_URL = '/login'
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            # Read directly from the settings variables now
+            'client_id': GOOGLE_CLIENT_ID,
+            'secret': GOOGLE_CLIENT_SECRET,
+            'key': '' 
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+# --- End Allauth Settings --- 

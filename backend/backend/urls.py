@@ -36,6 +36,9 @@ urlpatterns = [
 
     # Password Reset URLs
     path('api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
+
+    # Allauth URLs (for social login callback, etc.)
+    path('accounts/', include('allauth.urls')),
 ]
 
 # Add URL pattern for serving media files during development

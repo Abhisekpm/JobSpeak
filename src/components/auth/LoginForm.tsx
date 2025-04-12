@@ -5,12 +5,14 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import apiClient from '../../lib/apiClient';
 
 const LoginForm: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, handleSuccessfulAuth } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,10 +21,42 @@ const LoginForm: React.FC = () => {
     try {
       await login(identifier, password);
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Standard Login error:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse) => {
+    console.log("Google Login Success:", credentialResponse);
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post('auth/google/', {
+        access_token: credentialResponse.credential,
+      });
+      
+      console.log("Backend Google Auth response:", response.data);
+      
+      const { access, refresh, user } = response.data;
+
+      if (access && refresh && user) {
+        handleSuccessfulAuth(user, access, refresh);
+      } else {
+        console.error("Backend response missing tokens or user data.");
+        alert("Login failed: Invalid response from server after Google Sign-In.");
+      }
+
+    } catch (error) {
+      console.error("Error processing Google login with backend:", error);
+      alert("Failed to process Google login with backend.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLoginError = () => {
+    console.error('Google Login Failed');
+    alert("Google login failed. Please try again.");
   };
 
   return (
@@ -68,6 +102,20 @@ const LoginForm: React.FC = () => {
             {isLoading ? 'Logging in...' : 'Log in'}
           </Button>
         </form>
+        
+        <div className="my-4 flex items-center">
+            <div className="flex-grow border-t border-gray-300"></div>
+            <span className="mx-4 text-xs text-gray-500">OR</span>
+            <div className="flex-grow border-t border-gray-300"></div>
+        </div>
+
+        <div className="flex justify-center">
+             <GoogleLogin
+                onSuccess={handleGoogleLoginSuccess}
+                onError={handleGoogleLoginError}
+              />
+        </div>
+
       </CardContent>
       <CardFooter className="flex justify-center">
         <div className="text-center text-sm">

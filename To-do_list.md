@@ -127,10 +127,11 @@
 ### Polish
 - [ ] Perform accessibility audit (Lighthouse, axe DevTools, screen reader testing)
 - [ ] Implement fixes for identified accessibility issues (ARIA attributes, color contrast, etc.)
-- [ ] Implement comprehensive error handling in frontend (API errors, recording errors) and display user-friendly messages
-- [ ] Add loading state indicators for API calls and processing steps
+- [x] Implement comprehensive error handling in frontend (API errors, recording errors) and display user-friendly messages - *Improved in various components*
+- [x] Add loading state indicators for API calls and processing steps - *Implemented in various components*
 - [ ] Run code linters (ESLint, Flake8/Black) and format code
 - [ ] Refactor code for clarity, maintainability, and performance where needed
+- [ ] **Investigate Password Reset Flow:** Debug why the `django-rest-passwordreset` signal (`reset_password_token_created`) does not appear to trigger the email sending function (or why the console backend doesn't capture it) even when the API call is successful (200 OK). (New Task)
 
 ### Deployment Prep
 - [ ] Write/finalize `README.md` with project description, setup, and run instructions
@@ -173,3 +174,51 @@
 ### Frontend (React)
 - [x] No specific code changes *required* as backend returns the correct public S3 URL.
 - [x] Verify audio player works correctly with S3 URLs. - *Works*
+
+## Phase 7: Google Authentication
+
+### Backend (Django)
+- [x] Install `django-allauth` (`pip install django-allauth`)
+- [x] Configure `settings.py`:
+    - [x] Add `django.contrib.sites`, `allauth`, `allauth.account`, `allauth.socialaccount`, `allauth.socialaccount.providers.google` to `INSTALLED_APPS`.
+    - [x] Add `allauth.account.middleware.AccountMiddleware` to `MIDDLEWARE`.
+    - [x] Ensure `django.template.context_processors.request` in `TEMPLATES` context processors.
+    - [x] Add `AUTHENTICATION_BACKENDS` including `allauth.account.auth_backends.AuthenticationBackend`.
+    - [x] Set `SITE_ID = 1`.
+    - [x] Add `ACCOUNT_*` settings (e.g., `ACCOUNT_AUTHENTICATION_METHOD = 'username_email'`).
+    - [x] Add `SOCIALACCOUNT_PROVIDERS` structure for Google, reading Client ID/Secret from settings variables.
+    - [x] Define `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` settings variables reading from `os.environ`.
+- [x] Add `path('accounts/', include('allauth.urls'))` to project `urls.py`.
+- [x] Install `cryptography` dependency (`pip install cryptography`).
+- [x] Run migrations (`python manage.py migrate`).
+- [x] Configure Google Cloud Console Project:
+    - [x] Enable "Google People API".
+    - [x] Configure OAuth Consent Screen (App name, scopes: email/profile, test users).
+    - [x] Create OAuth 2.0 Client ID (Web application type).
+    - [x] Set Authorized JavaScript origins (Frontend URL: `http://localhost:5173`).
+    - [x] Set Authorized redirect URIs (Backend Callback: `http://127.0.0.1:8000/accounts/google/login/callback/`).
+    - [x] Obtain Client ID and Client Secret.
+- [x] Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` to `backend/.env` file.
+- [x] Install `google-auth` library (`pip install google-auth`).
+- [x] Create `google_login_callback` view in `api/views.py`:
+    - [x] Receives ID token from frontend.
+    - [x] Verifies token using `google.oauth2.id_token.verify_oauth2_token` and `settings.GOOGLE_CLIENT_ID`.
+    - [x] Finds existing `User` by email or creates a new `User`.
+    - [x] Generates JWT (access/refresh) tokens using `RefreshToken.for_user()`.
+    - [x] Returns tokens and basic user info.
+- [x] Add URL pattern `/api/auth/google/` pointing to `google_login_callback` view in `api/urls.py`.
+
+### Frontend (React)
+- [x] Install `@react-oauth/google` library (`npm install @react-oauth/google`).
+- [x] Add `VITE_GOOGLE_CLIENT_ID` to frontend `.env` file.
+- [x] Wrap application in `<GoogleOAuthProvider>` in `src/main.tsx`, passing the client ID.
+- [x] Add `<GoogleLogin>` button component to `src/components/auth/LoginForm.tsx`.
+- [x] Implement `handleGoogleLoginSuccess` in `LoginForm.tsx`:
+    - [x] Receives `credentialResponse` from Google.
+    - [x] Sends `credentialResponse.credential` (ID token) to backend endpoint (`/api/auth/google/`).
+    - [x] Receives JWT tokens and user data from backend.
+    - [x] Calls `handleSuccessfulAuth` from `AuthContext`.
+- [x] Implement `handleGoogleLoginError` handler in `LoginForm.tsx`.
+- [x] Refactor `AuthContext.tsx` to include `handleSuccessfulAuth` function for setting state/storage after successful login (standard or Google).
+- [x] Ensure frontend development server is restarted after `.env` changes.
+- [x] Test end-to-end Google login flow.

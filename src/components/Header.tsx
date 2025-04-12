@@ -33,7 +33,13 @@ const Header: React.FC = () => {
   return (
     <header className="bg-white border-b border-gray-200 py-2 sticky top-0 z-20">
       <div className="container mx-auto px-4 flex justify-between items-center h-14">
-        <Link to="/" className="font-bold text-xl">JobSpeak</Link>
+        <Link to="/" className="flex items-center">
+          <img 
+            src="/jobspeak_logo.png"
+            alt="JobSpeak Logo" 
+            className="h-10 w-auto"
+          />
+        </Link>
         <div>
           {isAuthenticated && user ? (
             <DropdownMenu>
