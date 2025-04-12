@@ -8,8 +8,9 @@ import RequestPasswordResetPage from './pages/RequestPasswordResetPage';
 import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
-import Home from './components/Home'; 
+import Home from './components/home';
 import ConversationDetail from './components/ConversationDetail';
+import SettingsPage from './pages/SettingsPage';
 
 // Simple ThemeProvider since the original can't be found
 const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
@@ -32,6 +33,7 @@ function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<Home />} />
               <Route path="/conversation/:id" element={<ConversationDetail />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
           

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import {
@@ -15,9 +15,10 @@ import { cn } from "@/lib/utils";
 
 const Header: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleSettings = () => {
-    console.log("Settings clicked");
+    navigate('/settings');
   };
 
   const getInitials = (name: string | undefined): string => {
@@ -67,7 +68,7 @@ const Header: React.FC = () => {
                   <span>Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+                <DropdownMenuItem onClick={logout} className="cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>

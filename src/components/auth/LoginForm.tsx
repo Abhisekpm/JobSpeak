@@ -21,37 +21,49 @@ const LoginForm: React.FC = () => {
     try {
       await login(identifier, password);
     } catch (error) {
-      console.error('Standard Login error:', error);
+      console.error('Standard Login error in component:', error);
+      // Error toast is likely handled in AuthContext.login
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse) => {
-    console.log("Google Login Success:", credentialResponse);
+    console.log("Google Login Success credentialResponse:", credentialResponse);
+    if (!credentialResponse.credential) {
+        console.error("Google Login Success - credentialResponse missing credential");
+        alert("Google login failed: No credential received.");
+        return;
+    }
     setIsLoading(true);
     try {
-      const response = await apiClient.post('auth/google/', {
-        access_token: credentialResponse.credential,
+      // Call the backend endpoint which verifies the Google token
+      // and returns our app's JWT tokens (access, refresh)
+      // Use relative path here, as apiClient baseURL already includes /api/
+      const response = await apiClient.post('auth/google/', { 
+        access_token: credentialResponse.credential, 
       });
       
       console.log("Backend Google Auth response:", response.data);
       
-      const { access, refresh, user } = response.data;
+      const { access, refresh } = response.data;
 
-      if (access && refresh && user) {
-        handleSuccessfulAuth(user, access, refresh);
+      // Pass ONLY the tokens to the refactored handleSuccessfulAuth
+      if (access && refresh) {
+        await handleSuccessfulAuth(access, refresh); // Let AuthContext handle user fetch & state update
+        // Success navigation/toast is handled within handleSuccessfulAuth
       } else {
-        console.error("Backend response missing tokens or user data.");
+        console.error("Backend response missing access or refresh tokens.");
         alert("Login failed: Invalid response from server after Google Sign-In.");
+        setIsLoading(false); // Ensure loading state is reset on error
       }
 
     } catch (error) {
       console.error("Error processing Google login with backend:", error);
-      alert("Failed to process Google login with backend.");
-    } finally {
-      setIsLoading(false);
-    }
+      alert("Failed to process Google login with backend. Check console for details.");
+      setIsLoading(false); // Ensure loading state is reset on error
+    } 
+    // No finally setIsLoading(false) here, it's handled in success/error paths or by navigation
   };
 
   const handleGoogleLoginError = () => {
@@ -76,6 +88,7 @@ const LoginForm: React.FC = () => {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
+              disabled={isLoading}
             />
           </div>
           <div className="space-y-2">
@@ -92,6 +105,7 @@ const LoginForm: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={isLoading}
             />
           </div>
           <Button
@@ -113,6 +127,8 @@ const LoginForm: React.FC = () => {
              <GoogleLogin
                 onSuccess={handleGoogleLoginSuccess}
                 onError={handleGoogleLoginError}
+                // Optionally disable button while loading
+                // disabled={isLoading} 
               />
         </div>
 

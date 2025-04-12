@@ -16,7 +16,7 @@ interface AuthContextType {
   login: (identifier: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  handleSuccessfulAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  handleSuccessfulAuth: (accessToken: string, refreshToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,19 +29,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in on mount
     const checkAuth = async () => {
       setLoading(true);
       try {
         const token = localStorage.getItem('access_token');
         if (token) {
-          // Validate token and get user info
+          // Make sure the apiClient uses the token from storage for this initial check
+          console.log("[Initial Check] Attempting to fetch user data...");
           const response = await apiClient.get('/users/me/');
+          console.log("[Initial Check] User data fetched successfully:", response.data);
           setUser(response.data);
           setIsAuthenticated(true);
         }
       } catch (error) {
-        // If token is invalid, clear it
+        console.log("[Initial Check] Failed or no token:", error);
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         setIsAuthenticated(false);
@@ -55,57 +56,81 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // --- Function to handle setting auth state after successful login/auth --- 
-  const handleSuccessfulAuth = (userData: User, accessToken: string, refreshToken: string) => {
+  const handleSuccessfulAuth = async (accessToken: string, refreshToken: string) => {
+    console.log("[handleSuccessfulAuth] Received tokens.");
+    
+    // 1. Store tokens first
+    console.log("[handleSuccessfulAuth] Storing access token:", accessToken);
     localStorage.setItem('access_token', accessToken);
+    console.log("[handleSuccessfulAuth] Storing refresh token:", refreshToken);
     localStorage.setItem('refresh_token', refreshToken);
-    setUser(userData);
-    setIsAuthenticated(true);
-    // Optional: Re-initialize apiClient interceptors if needed immediately
-    // apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-    console.log("Auth state updated successfully.", userData);
-    navigate('/'); // Navigate to home page
+    console.log("[handleSuccessfulAuth] Tokens stored in localStorage.");
+    
+    try {
+        // 2. Fetch user data
+        console.log("[handleSuccessfulAuth] Attempting to fetch user data with new token...");
+        const userResponse = await apiClient.get('/users/me/');
+        const userData = userResponse.data;
+        console.log("[handleSuccessfulAuth] User data fetched successfully:", userData);
+
+        // 3. Set state
+        console.log("[handleSuccessfulAuth] Setting user state and isAuthenticated=true.");
+        setUser(userData);
+        setIsAuthenticated(true);
+        console.log("Auth state updated successfully.");
+        navigate('/'); 
+        
+    } catch (error) {
+        console.error("[handleSuccessfulAuth] Failed to fetch user data after storing tokens:", error);
+        toast({
+            title: "Authentication Error",
+            description: "Could not retrieve user details. Logging out.",
+            variant: "destructive",
+        });
+        logout(); 
+        throw error; 
+    }
   };
 
   const login = async (identifier: string, password: string) => {
     try {
+      console.log(`[Login] Attempting login for user: ${identifier}`);
       const response = await apiClient.post('/token/', { 
         username: identifier, 
         password: password
       });
       const { access, refresh } = response.data;
+      console.log("[Login] Received tokens from /token/ endpoint.");
       
-      // Get user info (needed to pass to handleSuccessfulAuth)
-      const userResponse = await apiClient.get('/users/me/');
-      const userData = userResponse.data;
-      
-      // Call the common handler
-      handleSuccessfulAuth(userData, access, refresh);
-      
-      // Remove toast here, let handleSuccessfulAuth potentially handle it if needed
-      // toast({ title: "Login successful", description: "Welcome back!" });
+      await handleSuccessfulAuth(access, refresh);
+      console.log("[Login] handleSuccessfulAuth completed.");
       
     } catch (error) {
-      console.error("Login error:", error);
-      toast({
-        title: "Login failed",
-        description: "Invalid credentials. Please try again.",
-        variant: "destructive",
-      });
-      throw error;
+      if (error.response?.status !== 401) {
+         console.error("[Login] Error during /token/ call:", error);
+         toast({
+           title: "Login failed",
+           description: "Invalid credentials or server error. Please try again.",
+           variant: "destructive",
+         });
+      } else {
+         console.log("[Login] Caught 401 during user fetch, handled in handleSuccessfulAuth.");
+      }
     }
   };
 
   const register = async (username: string, email: string, password: string) => {
     try {
+      console.log(`[Register] Attempting registration for: ${username}`);
       await apiClient.post('/register/', { username, email, password });
+      console.log("[Register] Registration successful.");
       toast({ title: "Registration successful", description: "Please log in." });
-      // Don't auto-login here anymore, let user log in manually or via Google
-      // await login(email, password);
-      navigate('/login'); // Redirect to login after registration
+      navigate('/login'); 
     } catch (error) {
+      console.error("[Register] Registration failed:", error);
       toast({
         title: "Registration failed",
-        description: "Please check your information and try again.",
+        description: error.response?.data?.detail || "Please check your information and try again.",
         variant: "destructive",
       });
       throw error;
@@ -113,11 +138,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    console.log("[Logout] Clearing tokens and user state.");
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     setIsAuthenticated(false);
     setUser(null);
     navigate('/login');
+    console.log("User logged out.");
   };
 
   const value = {

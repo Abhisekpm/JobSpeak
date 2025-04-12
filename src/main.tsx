@@ -5,6 +5,7 @@ import App from './App.tsx'
 import './index.css'
 import { AuthProvider } from './contexts/AuthContext'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import { ThemeProvider as NextThemesProvider } from "next-themes"
 
 // Get Client ID from environment variables
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -15,12 +16,14 @@ if (!googleClientId) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId={googleClientId || ""}>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </GoogleOAuthProvider>
+    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem storageKey="vite-ui-theme">
+      <GoogleOAuthProvider clientId={googleClientId || ""}>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+      </GoogleOAuthProvider>
+    </NextThemesProvider>
   </React.StrictMode>,
 )
