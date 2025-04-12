@@ -222,3 +222,40 @@
 - [x] Refactor `AuthContext.tsx` to include `handleSuccessfulAuth` function for setting state/storage after successful login (standard or Google).
 - [x] Ensure frontend development server is restarted after `.env` changes.
 - [x] Test end-to-end Google login flow.
+
+## Phase 8: Audio File Download Feature
+
+### Backend (Django)
+- [x] Create a new view function in `backend/api/views.py` to generate pre-signed S3 URLs for downloads:
+  - [x] Add required imports for boto3 and S3 operations
+  - [x] Create a `generate_audio_download_url` view function
+  - [x] Add proper authentication and permission checks
+  - [x] Implement error handling for various scenarios
+  - [x] Generate a secure, time-limited pre-signed URL for file download
+  
+- [x] Configure URL routing:
+  - [x] Add URL pattern in `backend/api/urls.py` for the download endpoint
+  - [x] Use a RESTful pattern like `/conversations/<int:pk>/download_audio/`
+
+### Frontend (React)
+- [x] Implement download functionality in `ConversationDetail.tsx`:
+  - [x] Create a `handleAudioDownload` function to call the backend endpoint
+  - [x] Add loading state and error handling for the download process
+  - [x] Implement the actual file download using the returned pre-signed URL
+  
+- [x] Add UI elements:
+  - [x] Connect the existing download button to the new function
+  - [x] Add feedback during download (loading spinner/progress)
+  - [x] Display appropriate error messages if download fails
+
+### AWS S3 Configuration
+- [x] Ensure proper CORS configuration for the S3 bucket:
+  - [x] Allow GET requests from frontend origin
+  - [x] Verify content-disposition headers are properly set for downloads
+  - [ ] Test with different audio file sizes
+
+### Testing
+- [ ] Test download functionality with different browsers
+- [ ] Verify proper file naming in downloads
+- [ ] Check download functionality for users with different permissions
+- [ ] Implement unit and integration tests

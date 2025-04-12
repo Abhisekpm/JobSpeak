@@ -15,14 +15,19 @@ from pathlib import Path
 from datetime import timedelta # Keep existing timedelta import
 # from storages.backends.s3boto3 import S3Boto3Storage # Can likely remove this too if not used elsewhere directly
 
+# --- Force load .env here --- 
+# from dotenv import load_dotenv
+# env_path = Path(__file__).resolve().parent.parent / '.env' # Path relative to settings.py
+# print(f"DEBUG: Attempting to load .env from: {env_path}")
+# loaded = load_dotenv(dotenv_path=env_path)
+# print(f"DEBUG: dotenv loaded = {loaded}")
+# print(f"DEBUG settings.py: AWS_STORAGE_BUCKET_NAME = {os.environ.get('AWS_STORAGE_BUCKET_NAME')}")
+# print(f"DEBUG settings.py: AWS_ACCESS_KEY_ID = {os.environ.get('AWS_ACCESS_KEY_ID')}") 
+# print("---------------------------------")
+# --- End force load .env --- 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# --- Load .env file if python-dotenv is installed --- 
-# Optional: Consider adding python-dotenv to requirements.txt
-from dotenv import load_dotenv
-load_dotenv(BASE_DIR / '.env') 
-# --- End .env loading --- 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

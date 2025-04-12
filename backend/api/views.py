@@ -14,6 +14,10 @@ from storages.backends.s3boto3 import S3Boto3Storage
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import get_object_or_404
+import boto3
+from botocore.exceptions import ClientError
+import os
 
 User = get_user_model()
 
@@ -229,3 +233,122 @@ def google_login_callback(request):
         return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --- End Google Authentication View ---
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generate_audio_download_url(request, pk):
+    """
+    Generate a pre-signed URL for downloading the audio file from S3.
+    Handles potential discrepancies between DB path and actual S3 key.
+    """
+    try:
+        conversation = get_object_or_404(Conversation, pk=pk)
+
+        if conversation.user != request.user:
+            return Response(
+                {"error": "Permission denied"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if not conversation.audio_file:
+            return Response(
+                {"error": "No audio file available"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get the base name stored in the database
+        db_file_name = conversation.audio_file.name
+        print(f"DEBUG: DB file name: {db_file_name}")
+        
+        # Determine the correct S3 key based on current settings
+        # Use current settings' DEFAULT_FILE_STORAGE to decide the expected structure
+        current_storage_is_s3 = settings.DEFAULT_FILE_STORAGE == 'storages.backends.s3boto3.S3Boto3Storage'
+        aws_location = getattr(settings, 'AWS_LOCATION', None)
+        
+        s3_file_key = db_file_name
+        if current_storage_is_s3 and aws_location:
+            # If S3 is active AND an AWS_LOCATION is set, the actual S3 key
+            # should typically include the location prefix.
+            # We assume the db_file_name does NOT already include it.
+            expected_prefix = f"{aws_location}/"
+            if not db_file_name.startswith(expected_prefix):
+                s3_file_key = f"{expected_prefix}{db_file_name}"
+                print(f"DEBUG: Prepended AWS_LOCATION. Using key: {s3_file_key}")
+            else:
+                 print(f"DEBUG: DB name already includes location. Using key: {s3_file_key}")
+        else:
+            print(f"DEBUG: Not prepending location (S3 not default or no location set). Using key: {s3_file_key}")
+
+        # Initialize S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME
+        )
+        
+        # Check if the derived key exists
+        try:
+            s3_client.head_object(
+                Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                Key=s3_file_key
+            )
+            print(f"DEBUG: Confirmed file exists in S3 bucket at key: {s3_file_key}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                print(f"ERROR: Derived key '{s3_file_key}' does not exist in S3 bucket '{settings.AWS_STORAGE_BUCKET_NAME}'")
+                # Optionally, list objects here again if needed for further debugging
+                return Response(
+                    {"error": "The audio file could not be found in storage. It might have been moved or deleted, or the storage path is incorrect."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            else:
+                # Re-raise other S3 client errors
+                raise
+
+        # Get the file extension for the correct Content-Type
+        base_filename = os.path.basename(db_file_name) # Use original base name for download filename
+        file_extension = base_filename.split('.')[-1].lower() if '.' in base_filename else 'mp3'
+        
+        content_type_map = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'm4a': 'audio/mp4',
+            'ogg': 'audio/ogg',
+            'flac': 'audio/flac'
+        }
+        content_type = content_type_map.get(file_extension, 'audio/mpeg')
+        download_filename = f"{conversation.name or 'audio'}.{file_extension}"
+        
+        # Generate a pre-signed URL for the S3 object
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                'Key': s3_file_key,
+                'ResponseContentType': content_type,
+                'ResponseContentDisposition': f'attachment; filename="{download_filename}"',
+            },
+            ExpiresIn=3600
+        )
+        
+        print(f"DEBUG: Generated presigned URL (truncated): {presigned_url[:100]}...")
+        return Response({"download_url": presigned_url})
+    
+    except ClientError as e:
+        error_code = e.response['Error']['Code'] if 'Error' in e.response else 'Unknown'
+        error_message = e.response['Error']['Message'] if 'Error' in e.response else str(e)
+        print(f"ERROR: AWS S3 ClientError: Code={error_code}, Message={error_message}")
+        return Response(
+            {"error": f"Failed to generate download URL due to S3 error: {error_message}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    except Exception as e:
+        import traceback
+        print(f"ERROR: Unexpected error in generate_audio_download_url: {str(e)}")
+        print(traceback.format_exc())
+        return Response(
+            {"error": "An unexpected server error occurred while processing your request."}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

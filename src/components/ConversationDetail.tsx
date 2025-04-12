@@ -71,6 +71,7 @@ const ConversationDetail: React.FC = () => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // State for active tab
   const [activeTab, setActiveTab] = useState<string>("transcript"); 
@@ -398,6 +399,54 @@ const ConversationDetail: React.FC = () => {
     }
   };
 
+  // Function to handle audio download
+  const handleAudioDownload = async () => {
+    if (!conversation?.id) return;
+    
+    setIsDownloading(true);
+    
+    try {
+      // Show loading toast
+      toast({
+        title: "Preparing download...",
+        description: "We're generating a secure download link for you.",
+      });
+      
+      // Request a download URL from the backend
+      const response = await apiClient.get(`/conversations/${conversation.id}/download_audio/`);
+      
+      if (response.data && response.data.download_url) {
+        // Create a temporary link element
+        const downloadLink = document.createElement('a');
+        downloadLink.href = response.data.download_url;
+        downloadLink.target = '_blank';
+        downloadLink.download = `${conversation.name || 'audio'}.mp3`;
+        
+        // Trigger the download
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Show success toast
+        toast({
+          title: "Download started",
+          description: "Your audio file download has started.",
+        });
+      } else {
+        throw new Error("No download URL returned");
+      }
+    } catch (err: any) {
+      console.error("Error downloading audio:", err);
+      toast({
+        title: "Download failed",
+        description: err.response?.data?.error || "Could not download the audio file.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="p-6 text-center">Loading conversation details...</div>;
   }
@@ -492,13 +541,31 @@ const ConversationDetail: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
-          <Button variant="outline" size="sm">
+          {/* --- Share Button Removed --- */}
+          {/* <Button variant="outline" size="sm">
             <Share2 className="h-4 w-4 mr-2" />
             Share
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Download
+          </Button> */}
+          {/* --- END OF SHARE BUTTON --- */}
+
+          {/* --- Download Button (remains) --- */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleAudioDownload}
+            disabled={isDownloading || !conversation.audio_file}
+          >
+            {isDownloading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Downloading...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </>
+            )}
           </Button>
         </div>
       </div>
