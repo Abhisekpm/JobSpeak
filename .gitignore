@@ -34,3 +34,11 @@ core
 
 .env
 
+# Environment
+backend/.venv/
+backend/.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.env
+
