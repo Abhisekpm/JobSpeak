@@ -6,6 +6,8 @@ import RegisterPage from './pages/RegisterPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
 import Home from './components/Home';
+import ConversationDetail from './components/ConversationDetail';
+import SettingsPage from './pages/SettingsPage';
 
 const AppRoutes: React.FC = () => {
   return (

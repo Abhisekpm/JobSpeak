@@ -18,6 +18,7 @@ interface ConversationCardProps {
   previewText?: string;
   onDelete?: () => void;
   onClick?: () => void;
+  transcriptionPreview?: string;
 }
 
 const ConversationCard: React.FC<ConversationCardProps> = ({

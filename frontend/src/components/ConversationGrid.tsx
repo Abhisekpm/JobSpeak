@@ -170,11 +170,13 @@ const ConversationGrid: React.FC<ConversationGridProps> = ({
       {/* Search and Filter Section */}
       <div className="mb-6">
         <SearchFilter
-          onSearch={handleSearch}
+          onSearchChange={handleSearch}
           onFilter={handleFilter}
-          onSort={handleSort}
         />
       </div>
+
+      {/* Add spacing below the search/filter bar */}
+      <div className="h-4"></div>
 
       {/* Conversations Grid */}
       {filteredConversations.length > 0 ? (
@@ -182,14 +184,13 @@ const ConversationGrid: React.FC<ConversationGridProps> = ({
           {filteredConversations.map((conversation) => (
             <ConversationCard
               key={conversation.id}
+              id={conversation.id}
               title={conversation.title}
               date={conversation.date}
               duration={conversation.duration}
               transcriptionPreview={conversation.transcriptionPreview}
               onClick={() => onConversationClick(conversation.id)}
               onDelete={() => onDelete(conversation.id)}
-              onShare={() => onShare(conversation.id)}
-              onExport={() => onExport(conversation.id)}
             />
           ))}
         </div>

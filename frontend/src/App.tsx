@@ -8,7 +8,7 @@ import RequestPasswordResetPage from './pages/RequestPasswordResetPage';
 import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
-import Home from './components/home';
+import Home from './components/Home';
 import ConversationDetail from './components/ConversationDetail';
 import SettingsPage from './pages/SettingsPage';
 
