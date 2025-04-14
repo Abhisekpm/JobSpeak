@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import apiClient from "../lib/apiClient"; // Import the API client
-import Header from "./Header";
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
 import RecordingModal from "./RecordingModal";
@@ -218,7 +217,7 @@ const Home = () => {
   };
 
   const handleViewDetails = (id: string | number) => {
-    navigate(`/conversation/${String(id)}`);
+    navigate(`/conversations/${String(id)}`);
   };
 
   // Helper function to format date (can be moved to utils if needed)
@@ -335,9 +334,6 @@ const Home = () => {
   return (
     // Use a flex column layout for the overall page structure
     <div className="flex flex-col min-h-screen">
-      {/* Render the Header at the top - it gets user info internally */}
-      <Header /> 
-
       {/* Main content area */}
       <main className="container mx-auto px-4 py-8 flex-grow">
           {/* Search and Filter Bar */}

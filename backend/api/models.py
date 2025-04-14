@@ -3,12 +3,36 @@ from django.utils import timezone
 import os
 from django.conf import settings # Import settings to get AUTH_USER_MODEL
 
-# Define a dynamic path for uploaded audio files
+# Define a dynamic path for uploaded conversation audio files
 def conversation_audio_path(instance, filename):
     # File will be uploaded to MEDIA_ROOT/conversations/<user_id>/<convo_id>/<filename>
-    # Ensure instance.user_id exists when this is called (usually after initial save if user is set)
     user_id_folder = instance.user.id if instance.user else 'anonymous'
     return f'conversations/{user_id_folder}/{instance.id}/{filename}'
+
+# Define a dynamic path for uploaded resume files
+def resume_upload_path(instance, filename):
+    # File will be uploaded to MEDIA_ROOT/resumes/<user_id>/<filename>
+    # instance is UserProfile, so access user via instance.user
+    user_id_folder = instance.user.id if instance.user else 'anonymous'
+    # Include a timestamp or unique identifier to prevent overwrites if user uploads multiple resumes with the same name
+    timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+    base, ext = os.path.splitext(filename)
+    # Sanitize filename slightly (optional, consider a more robust library if needed)
+    safe_base = "".join(c for c in base if c.isalnum() or c in ('_', '-')).rstrip()
+    safe_filename = f"{safe_base}_{timestamp}{ext}"
+    final_path = f'resumes/{user_id_folder}/{safe_filename}'
+    return final_path
+
+# Define a dynamic path for uploaded job description files
+def job_description_upload_path(instance, filename):
+    # File will be uploaded to MEDIA_ROOT/job_descriptions/<user_id>/<filename>
+    user_id_folder = instance.user.id if instance.user else 'anonymous'
+    timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+    base, ext = os.path.splitext(filename)
+    safe_base = "".join(c for c in base if c.isalnum() or c in ('_', '-')).rstrip()
+    safe_filename = f"{safe_base}_{timestamp}{ext}"
+    final_path = f'job_descriptions/{user_id_folder}/{safe_filename}'
+    return final_path
 
 class Conversation(models.Model):
     # --- Status Definitions ---
@@ -128,4 +152,33 @@ class Conversation(models.Model):
     # def save(self, *args, **kwargs):
     #     # Add logic if needed
     #     super().save(*args, **kwargs)
+
+# --- User Profile Model ---
+class UserProfile(models.Model):
+    """
+    Stores additional user-specific information, like resume and job description files.
+    Linked one-to-one with the main User model.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True, # Makes the User the primary key for the profile
+        related_name='userprofile' # Allows access via user.userprofile
+    )
+    resume = models.FileField(
+        upload_to=resume_upload_path,
+        null=True,
+        blank=True,
+        help_text="User's uploaded resume file (PDF, DOCX, etc.)."
+    )
+    job_description = models.FileField( # Changed from TextField
+        upload_to=job_description_upload_path, # Added upload_to
+        null=True,
+        blank=True,
+        help_text="Uploaded job description file (PDF, DOCX, etc.)." # Updated help_text
+    )
+
+    def __str__(self):
+        return f"Profile for {self.user.username}"
+
 # Check the existing models

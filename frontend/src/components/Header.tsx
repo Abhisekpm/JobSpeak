@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { User, Settings, LogOut } from "lucide-react";
+import { User, Settings, LogOut, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Header: React.FC = () => {
@@ -19,6 +19,10 @@ const Header: React.FC = () => {
 
   const handleSettings = () => {
     navigate('/settings');
+  };
+
+  const handleMockInterview = () => {
+    navigate('/mock-interview');
   };
 
   const getInitials = (name: string | undefined): string => {
@@ -63,6 +67,10 @@ const Header: React.FC = () => {
                   )}
                 </div>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleMockInterview} className="cursor-pointer">
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  <span>Mock Interview</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleSettings} className="cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>

@@ -259,3 +259,43 @@
 - [ ] Verify proper file naming in downloads
 - [ ] Check download functionality for users with different permissions
 - [ ] Implement unit and integration tests
+
+## Phase 9: User Profile (Resume & Job Description)
+
+### Backend (Django)
+- [ ] Define `UserProfile` Model (`api/models.py`):
+  - [ ] Create `UserProfile` model.
+  - [ ] Add `OneToOneField` to `User` (`on_delete=CASCADE`).
+  - [ ] Add `resume` (`FileField`, `upload_to='resumes/%Y/%m/%d/'`, `null=True`, `blank=True`).
+  - [ ] Add `job_description` (`TextField`, `null=True`, `blank=True`).
+  - [ ] Add `__str__` method.
+- [ ] Implement Automatic Profile Creation (`api/signals.py`):
+  - [ ] Create `signals.py` if needed.
+  - [ ] Write `post_save` signal receiver for `User` creation.
+  - [ ] Connect signal in `api/apps.py` `ready()` method.
+- [ ] Admin Integration (`api/admin.py`):
+  - [ ] Register `UserProfile` model.
+- [ ] Migrations:
+  - [ ] Run `makemigrations api`.
+  - [ ] Run `migrate`.
+- [ ] Serializer (`api/serializers.py`):
+  - [ ] Create `UserProfileSerializer`.
+  - [ ] Include `resume` (consider `read_only` for list) and `job_description`.
+- [ ] API View (`api/views.py`):
+  - [ ] Create `UserProfileView` (e.g., `RetrieveUpdateAPIView`).
+  - [ ] Set queryset, serializer, permissions.
+  - [ ] Override `get_object` to fetch profile for `request.user`.
+- [ ] URL Routing (`api/urls.py`):
+  - [ ] Add URL pattern `/profile/` pointing to `UserProfileView`.
+
+### Frontend (React)
+- [ ] UI Implementation:
+  - [ ] Create "Profile" page/section (e.g., update Settings or new page).
+  - [ ] Add file input for resume upload.
+  - [ ] Add textarea for job description.
+- [ ] API Integration:
+  - [ ] Fetch profile data on component mount (`GET /api/profile/`).
+  - [ ] Implement save function (`PUT/PATCH /api/profile/` using `FormData`).
+- [ ] State Management:
+  - [ ] Manage state for resume filename/URL and job description.
+  - [ ] Handle loading and error states.

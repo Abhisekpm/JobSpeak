@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Conversation  # Remove Message import
+from .models import Conversation, UserProfile  # Remove Message import
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage # Ensure imported
 
@@ -137,3 +137,83 @@ class UserSerializer(serializers.ModelSerializer):
             # Log any errors during user creation
             print(f"Error creating user: {str(e)}")
             raise serializers.ValidationError(str(e))
+
+# --- UserProfile Serializer ---
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserProfile model.
+    Allows updating resume and job_description files.
+    """
+    # Define fields explicitly to control read/write behavior
+    resume = serializers.FileField(required=False, allow_null=True, use_url=True)
+    job_description = serializers.FileField(required=False, allow_null=True, use_url=True)
+    # Read-only field for the username, useful for context
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'user', 
+            'username', 
+            'resume', 
+            'job_description'
+        ]
+        read_only_fields = ['user', 'username'] # User should not be changed here
+
+    def update(self, instance, validated_data):
+        """Update UserProfile, handling file uploads manually to S3."""
+        
+        storage = S3Boto3Storage() # Instantiate S3 storage
+        updated_fields = []
+
+        # Handle resume file
+        resume_file = validated_data.get('resume') # Use .get() to handle absence safely
+        if 'resume' in validated_data: # Check if the field was explicitly sent
+            updated_fields.append('resume')
+            # Get the old file path before potentially changing it
+            old_resume_path = instance.resume.name if instance.resume else None
+            
+            if resume_file: # A new file was uploaded
+                new_resume_path = instance.resume.field.generate_filename(instance, resume_file.name)
+                try:
+                    saved_resume_path = storage.save(new_resume_path, resume_file)
+                    instance.resume.name = saved_resume_path 
+                except Exception as e:
+                    print(f"ERROR: Failed to manually save resume to S3: {e}")
+                    raise serializers.ValidationError({"resume": f"Failed to upload file: {e}"})
+                
+                if old_resume_path and old_resume_path != saved_resume_path:
+                    storage.delete(old_resume_path)
+                    
+            else: # resume field was sent as null or empty - clear the field
+                if old_resume_path:
+                    storage.delete(old_resume_path)
+                instance.resume = None
+
+        # Handle job_description file similarly
+        jd_file = validated_data.get('job_description')
+        if 'job_description' in validated_data:
+            updated_fields.append('job_description')
+            old_jd_path = instance.job_description.name if instance.job_description else None
+
+            if jd_file:
+                new_jd_path = instance.job_description.field.generate_filename(instance, jd_file.name)
+                try:
+                    saved_jd_path = storage.save(new_jd_path, jd_file)
+                    instance.job_description.name = saved_jd_path
+                except Exception as e:
+                    print(f"ERROR: Failed to manually save job description to S3: {e}")
+                    raise serializers.ValidationError({"job_description": f"Failed to upload file: {e}"})
+                    
+                if old_jd_path and old_jd_path != saved_jd_path:
+                    storage.delete(old_jd_path)
+            else:
+                if old_jd_path:
+                    storage.delete(old_jd_path)
+                instance.job_description = None
+
+        # Save only the updated fields to the database
+        if updated_fields:
+             instance.save(update_fields=updated_fields)
+
+        return instance

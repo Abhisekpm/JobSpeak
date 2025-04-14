@@ -1,34 +1,38 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+// import { AuthProvider } from './contexts/AuthContext'; // Removed import
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
-import Home from './components/Home';
+import Home from './components/home';
 import ConversationDetail from './components/ConversationDetail';
 import SettingsPage from './pages/SettingsPage';
+import MockInterviewPage from './pages/MockInterviewPage';
 
 const AppRoutes: React.FC = () => {
   return (
-    <AuthProvider>
+    // <AuthProvider> // Removed wrapper
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        {/* <Route path="/mock-interview" element={<MockInterviewPage />} /> // Moved back inside */}
         
         {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
-            {/* Add other protected routes here */}
+            <Route path="/conversations/:id" element={<ConversationDetail />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/mock-interview" element={<MockInterviewPage />} />
           </Route>
         </Route>
         
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </AuthProvider>
+    // </AuthProvider> // Removed wrapper
   );
 };
 

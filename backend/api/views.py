@@ -1,10 +1,11 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, generics
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Conversation
-from .serializers import ConversationSerializer, UserSerializer, ConversationCreateSerializer
+from rest_framework.views import APIView
+from .models import Conversation, UserProfile
+from .serializers import ConversationSerializer, UserSerializer, ConversationCreateSerializer, UserProfileSerializer
 from .permissions import IsOwner
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
@@ -18,6 +19,8 @@ from django.shortcuts import get_object_or_404
 import boto3
 from botocore.exceptions import ClientError
 import os
+import traceback
+from .services.mock_interview import extract_text_from_file, generate_mock_questions
 
 User = get_user_model()
 
@@ -345,10 +348,130 @@ def generate_audio_download_url(request, pk):
         )
     
     except Exception as e:
-        import traceback
         print(f"ERROR: Unexpected error in generate_audio_download_url: {str(e)}")
         print(traceback.format_exc())
         return Response(
             {"error": "An unexpected server error occurred while processing your request."}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+# --- UserProfile View ---
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    """
+    API endpoint for retrieving and updating the authenticated user's profile.
+    Handles file uploads for resume and job_description.
+    """
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    # Use MultiPartParser for file uploads along with JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser] 
+
+    def get_object(self):
+        """Return the UserProfile associated with the current authenticated user."""
+        # UserProfile has a OneToOne link to User, which is the primary key.
+        # We can fetch the profile using the user object from the request.
+        # Using get_or_create ensures a profile exists if the signal somehow failed earlier.
+        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+        if created:
+            print(f"WARN: UserProfile created on-demand for user {self.request.user.username}")
+        return profile
+
+    def perform_update(self, serializer):
+        """Ensure the user is updated correctly."""
+        # The get_object method ensures we are operating on the correct user's profile.
+        
+        try:
+            serializer.save() # This now calls the refactored serializer update method
+                 
+        except Exception as e:
+            print(f"ERROR: Exception during serializer.save() for UserProfile: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            raise
+            
+        # Keep original print
+        print(f"UserProfile updated for user: {self.request.user.username}")
+
+    # Optional: Add specific PUT/PATCH handling if needed, but RetrieveUpdateAPIView handles it.
+    # def put(self, request, *args, **kwargs):
+    #     return self.update(request, *args, **kwargs)
+
+    # def patch(self, request, *args, **kwargs):
+    #     return self.partial_update(request, *args, **kwargs)
+
+# --- End UserProfile View ---
+
+# --- Mock Interview Question View ---
+
+class GetMockInterviewQuestionsView(APIView):
+    """
+    API endpoint to generate mock interview questions based on the
+    authenticated user's uploaded resume and job description.
+    Requires both files to be present.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        try:
+            user_profile = UserProfile.objects.get(user=user)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "User profile not found. Please complete your profile setup."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if both files exist
+        if not user_profile.resume or not user_profile.job_description:
+            missing_files = []
+            if not user_profile.resume: missing_files.append("resume")
+            if not user_profile.job_description: missing_files.append("job description")
+            return Response(
+                {"error": f"Missing required file(s): {', '.join(missing_files)}. Please upload them in settings."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            print(f"Extracting text for user {user.username}...")
+            # Access the file fields directly from the UserProfile instance
+            resume_text = extract_text_from_file(user_profile.resume)
+            jd_text = extract_text_from_file(user_profile.job_description)
+            print(f"Text extracted. Resume length: {len(resume_text)}, JD length: {len(jd_text)}")
+
+        except ValueError as e:
+            # Catch errors from text extraction (unsupported type, processing error)
+            print(f"Text extraction error for user {user.username}: {e}")
+            return Response(
+                {"error": f"Failed to process files: {e}"}, 
+                status=status.HTTP_400_BAD_REQUEST # Or 500 if it indicates a server issue
+            )
+        except Exception as e:
+            # Catch unexpected errors during file reading/access
+            print(f"Unexpected error during text extraction for user {user.username}: {e}\n{traceback.format_exc()}")
+            return Response(
+                {"error": "An unexpected error occurred while processing files."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        try:
+            print(f"Generating mock interview questions for user {user.username}...")
+            questions = generate_mock_questions(resume_text, jd_text)
+            print(f"Successfully generated {len(questions)} questions.")
+            return Response({"questions": questions}, status=status.HTTP_200_OK)
+        
+        except RuntimeError as e:
+            # Catch errors specifically from the generation service (e.g., API key issue, Gemini error)
+            print(f"Mock question generation error for user {user.username}: {e}")
+            # Return a more specific server-side error message
+            return Response(
+                {"error": f"Failed to generate questions: {e}"}, 
+                status=status.HTTP_503_SERVICE_UNAVAILABLE # Service unavailable might be appropriate
+            )
+        except Exception as e:
+            # Catch unexpected errors during generation call
+            print(f"Unexpected error during question generation for user {user.username}: {e}\n{traceback.format_exc()}")
+            return Response(
+                {"error": "An unexpected error occurred while generating questions."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

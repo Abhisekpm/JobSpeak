@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.google', # Google provider
 
     # Local apps
-    'api',
+    'api.apps.ApiConfig', # Use AppConfig to load signals
 ]
 
 MIDDLEWARE = [
@@ -182,8 +182,8 @@ if AWS_STORAGE_BUCKET_NAME:
     AWS_S3_OBJECT_PARAMETERS = {
         'CacheControl': 'max-age=86400',
     }
-    AWS_LOCATION = 'media'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
+    AWS_LOCATION = 'media' # RESTORED - Files stored under media/ prefix
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/' # RESTORED URL with location prefix
     
     # Use S3 backend (string path is fine)
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage' 
