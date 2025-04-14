@@ -27,7 +27,7 @@ try:
         # Initialize the Gemini model
         # Add basic error handling for model initialization
         try:
-            model = genai.GenerativeModel('gemini-2.0-flash') 
+            model = genai.GenerativeModel('gemini-1.5-pro') 
             print("Successfully initialized Google Gemini model.")
         except Exception as model_init_error:
             print(f"ERROR: Failed to initialize Google Gemini model: {model_init_error}")
@@ -129,7 +129,7 @@ def generate_mock_questions(resume_text: str, jd_text: str) -> List[str]:
         raise RuntimeError("Mock interview generation service is unavailable. Please check configuration.")
         
     prompt = f"""
-    Based on the following resume and job description, generate a list of 5-7 insightful mock interview questions tailored for this specific candidate and role. The questions should primarily be behavioral or situational, probing the candidate's experience and suitability as demonstrated in their resume against the requirements listed in the job description. Avoid generic questions.
+    Based on the following resume and job description, generate a list of 8-10 insightful mock interview questions tailored for this specific candidate and role. The questions should primarily be behavioral or situational, probing the candidate's experience and suitability as demonstrated in their resume against the requirements listed in the job description. Avoid generic questions.
 
     Resume Text:
     ----------
