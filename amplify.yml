@@ -1,0 +1,40 @@
+version: 1
+applications:
+  # --- Definition for the main React App (frontend) ---
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm install
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        # Assuming your React app builds to 'dist'. Adjust if needed (e.g., 'build')
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/* # Cache node_modules inside frontend/
+
+  # --- Definition for the Landing Page App (Next.js) ---
+  - appRoot: landing-page
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            # No need to cd here, appRoot handles the context
+            - npm install
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        # Next.js App Router output directory
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/* # Cache node_modules inside landing-page/

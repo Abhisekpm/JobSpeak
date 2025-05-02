@@ -18,3 +18,18 @@
 - Write thorough tests for all major functionality
 - Avoid making major changes to the patterns and architecture of how a feature works, after it has shown to work well, unless explicitly instructed
 - Always think about what other methods and areas of code might be affected by code changes
+
+# General Web Dev
+- Use semantic HTML5 elements.
+- Prioritize accessibility (use ARIA attributes where appropriate).
+- Generate responsive designs that work on mobile, tablet, and desktop.
+
+# Next.js & React Specific
+- Use Next.js App Router conventions.
+- Use React functional components with TypeScript.
+- Use CSS Modules for component-specific styles [OR] Use Tailwind CSS utility classes for styling. [CHOOSE ONE or state preference]
+
+# Landing Page Specific
+- Aim for a clean, modern, and professional design suitable for a productivity/analysis tool like JobSpeak.
+- Use clear calls to action.
+
