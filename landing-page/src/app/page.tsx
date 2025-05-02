@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 // Simple placeholder for potential icons
 const CheckIcon = () => (
@@ -11,7 +12,18 @@ export default function LandingPage() {
   return (
     <div className="bg-gray-50 text-gray-800">
       {/* Hero Section */}
-      <section className="text-center py-20 px-4 bg-gradient-to-b from-white to-gray-100">
+      <section className="text-center pt-10 pb-20 px-4 bg-gradient-to-b from-white to-gray-100">
+        {/* Banner Image */}
+        <div className="relative w-full max-w-4xl mx-auto mb-10 h-50 md:h-50 lg:h-50">
+          <Image
+            src="/images/banner image.png"
+            alt="Job Speak banner showing confident professionals"
+            fill
+            style={{ objectFit: 'cover' }}
+            priority
+            className="rounded-lg shadow-md"
+          />
+        </div>
         <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
           Ace Your Next Career Conversation
         </h1>
@@ -23,7 +35,7 @@ export default function LandingPage() {
         </p>
         <a
           href="#start" // Link to CTA section or signup page
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300"
+          className="bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300"
         >
           Start Preparing Smarter
         </a>
@@ -68,15 +80,15 @@ export default function LandingPage() {
           What Our Users Are Saying
         </h3>
         <div className="max-w-4xl mx-auto space-y-8">
-          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-500">
+          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
             <p>"After using Job Speak for just two weeks, I walked into my dream job interview with a level of confidence I've never felt before. The personalized feedback was like having a career coach in my pocket."</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Alexis T., Software Engineer</footer>
           </blockquote>
-          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-500">
+          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
             <p>"The mock interview questions were eerily similar to what I was actually asked! Job Speak helped me prepare answers that highlighted my strengths perfectly."</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Marcus K., Marketing Specialist</footer>
           </blockquote>
-          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-500">
+          <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
             <p>"As someone with interview anxiety, being able to practice and get feedback in private was a game-changer. I got the job offer yesterday!"</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Jamie L., Healthcare Administrator</footer>
           </blockquote>
@@ -90,22 +102,22 @@ export default function LandingPage() {
         </h3>
         <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 text-center">
           <div>
-            <div className="bg-blue-500 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">1</div>
+            <div className="bg-blue-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">1</div>
             <h4 className="font-semibold mb-1">Upload Your Materials</h4>
             <p className="text-sm text-gray-600">Share your resume and target job descriptions</p>
           </div>
           <div>
-            <div className="bg-blue-500 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">2</div>
+            <div className="bg-blue-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">2</div>
             <h4 className="font-semibold mb-1">Practice Conversations</h4>
             <p className="text-sm text-gray-600">Record mock interviews or networking discussions</p>
           </div>
           <div>
-            <div className="bg-blue-500 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">3</div>
+            <div className="bg-blue-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">3</div>
             <h4 className="font-semibold mb-1">Receive Coaching</h4>
             <p className="text-sm text-gray-600">Get personalized feedback on your communication</p>
           </div>
           <div>
-            <div className="bg-blue-500 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">4</div>
+            <div className="bg-blue-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-3">4</div>
             <h4 className="font-semibold mb-1">Refine & Improve</h4>
             <p className="text-sm text-gray-600">Apply insights to build your confidence</p>
           </div>
@@ -113,20 +125,20 @@ export default function LandingPage() {
       </section>
 
       {/* Call to Action Section */}
-      <section id="start" className="py-20 px-4 bg-blue-700 text-white text-center">
+      <section id="start" className="py-20 px-4 bg-blue-900 text-white text-center">
         <h2 className="text-3xl md:text-4xl font-bold mb-4">
           Start Preparing Smarter
         </h2>
-        <p className="text-lg md:text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+        <p className="text-lg md:text-xl text-blue-200 mb-8 max-w-2xl mx-auto">
           Your next career opportunity is waiting. Are you ready to speak with confidence?
         </p>
         <a
-          href="/signup" // Link to actual signup page
-          className="bg-white hover:bg-gray-100 text-blue-700 font-bold py-3 px-8 rounded-lg text-lg transition duration-300 shadow-md"
+          href="https://app.jobspeak.us"
+          className="bg-white hover:bg-gray-100 text-blue-900 font-bold py-3 px-8 rounded-lg text-lg transition duration-300 shadow-md"
         >
           Get Started Now
         </a>
-        <p className="mt-6 text-sm text-blue-200">
+        <p className="mt-6 text-sm text-blue-300">
           Free 7-day trial • No credit card required • Cancel anytime
         </p>
       </section>
