@@ -19,7 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
-from api.views import register_user, get_user_details
+from api.views import get_user_details
 from api.authentication import FlexibleTokenObtainPairView
 
 urlpatterns = [
@@ -30,8 +30,6 @@ urlpatterns = [
     path('api/token/', FlexibleTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
-    # User registration and details endpoints
-    path('api/register/', register_user, name='register'),
     path('api/users/me/', get_user_details, name='user_details'),
 
     # Password Reset URLs

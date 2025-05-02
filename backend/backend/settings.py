@@ -262,3 +262,19 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 # --- End Allauth Settings --- 
+
+# Add your frontend development server origin here
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173', # Vite/React dev server
+    'http://127.0.0.1:5173', # Sometimes needed as well
+    # Add other trusted origins if necessary (e.g., your production frontend URL)
+]
+
+# Ensure CORS settings are also appropriate if you haven't configured them
+# Example (adjust as needed):
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:5173",
+#     "http://127.0.0.1:5173",
+# ]
+# Or allow all for development (less secure):
+# CORS_ALLOW_ALL_ORIGINS = True
