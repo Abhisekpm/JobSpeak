@@ -1,5 +1,5 @@
     # netlify.toml at repository root
     [build]
       base    = "landing-page"  # Directory to change to before starting build
-      publish = "landing-page/.next" # Path to deploy folder (relative to repo root)
+      publish = ".next" # Path to deploy folder (relative to repo root)
       command = "npm run build"     # Build command
