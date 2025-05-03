@@ -3,16 +3,26 @@ frontend:
   phases:
     preBuild:
       commands:
-        - if [ "$AWS_BRANCH" == "master" ]; then cd frontend; else cd landing-page; fi
+        - echo "Starting build for branch: $AWS_BRANCH"
+        # Determine the application directory based on the branch
+        - if [ "$AWS_BRANCH" = "master" ]; then app_dir="frontend"; else app_dir="landing-page"; fi
+        - echo "Changing directory to $app_dir"
+        # Change directory
+        - cd $app_dir
+        # Install dependencies within the app directory
         - npm install
     build:
       commands:
+        - echo "Running build command in $(pwd)..."
+        # Build command runs within the app directory
         - npm run build
   artifacts:
-    baseDirectory: >
-      ${AWS_BRANCH} == "master" ? "frontend/dist" : "landing-page/.next"
+    # baseDirectory is relative to the final working directory ($app_dir)
+    # It should be 'dist' for the React app and '.next' for the Next.js app
+    baseDirectory: $(if [ "$AWS_BRANCH" = "master" ]; then echo "dist"; else echo ".next"; fi)
     files:
       - '**/*'
   cache:
     paths:
+      # Cache path is relative to the final working directory ($app_dir)
       - node_modules/**/*
