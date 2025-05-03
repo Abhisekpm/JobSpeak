@@ -4,11 +4,14 @@ frontend:
     preBuild:
       commands:
         - echo "Starting build for branch: $AWS_BRANCH"
-        # Determine the application directory based on the branch
-        - if [ "$AWS_BRANCH" = "master" ]; then app_dir="frontend"; else app_dir="landing-page"; fi
+        # Determine the application directory and export it
+        - if [ "$AWS_BRANCH" = "master" ]; then export app_dir="frontend"; else export app_dir="landing-page"; fi
         - echo "Changing directory to $app_dir"
         # Change directory
         - cd $app_dir
+        # Determine the artifact directory *relative to the app_dir* and export it
+        - if [ "$AWS_BRANCH" = "master" ]; then export ARTIFACT_DIR="dist"; else export ARTIFACT_DIR=".next"; fi
+        - echo "Artifact directory set to: $ARTIFACT_DIR"
         # Install dependencies within the app directory
         - npm install
     build:
@@ -17,9 +20,8 @@ frontend:
         # Build command runs within the app directory
         - npm run build
   artifacts:
-    # baseDirectory is relative to the final working directory ($app_dir)
-    # It should be 'dist' for the React app and '.next' for the Next.js app
-    baseDirectory: $(if [ "$AWS_BRANCH" = "master" ]; then echo "dist"; else echo ".next"; fi)
+    # Use the environment variable determined in preBuild. YAML handles simple $VAR substitution fine.
+    baseDirectory: $ARTIFACT_DIR
     files:
       - '**/*'
   cache:
