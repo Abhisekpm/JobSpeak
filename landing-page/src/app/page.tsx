@@ -2,11 +2,11 @@ import React from 'react';
 import Image from 'next/image';
 
 // Simple placeholder for potential icons
-const CheckIcon = () => (
-  <svg className="w-6 h-6 inline-block mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-  </svg>
-);
+// const CheckIcon = () => (
+//   <svg className="w-6 h-6 inline-block mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+//   </svg>
+// );
 
 export default function LandingPage() {
   return (
@@ -81,15 +81,15 @@ export default function LandingPage() {
         </h3>
         <div className="max-w-4xl mx-auto space-y-8">
           <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
-            <p>"After using Job Speak for just two weeks, I walked into my dream job interview with a level of confidence I've never felt before. The personalized feedback was like having a career coach in my pocket."</p>
+            <p>&quot;After using Job Speak for just two weeks, I walked into my dream job interview with a level of confidence I&apos;ve never felt before. The personalized feedback was like having a career coach in my pocket.&quot;</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Alexis T., Software Engineer</footer>
           </blockquote>
           <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
-            <p>"The mock interview questions were eerily similar to what I was actually asked! Job Speak helped me prepare answers that highlighted my strengths perfectly."</p>
+            <p>&quot;The mock interview questions were eerily similar to what I was actually asked! Job Speak helped me prepare answers that highlighted my strengths perfectly.&quot;</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Marcus K., Marketing Specialist</footer>
           </blockquote>
           <blockquote className="bg-white p-6 rounded-lg shadow-md text-gray-700 italic border-l-4 border-blue-900">
-            <p>"As someone with interview anxiety, being able to practice and get feedback in private was a game-changer. I got the job offer yesterday!"</p>
+            <p>&quot;As someone with interview anxiety, being able to practice and get feedback in private was a game-changer. I got the job offer yesterday!&quot;</p>
             <footer className="mt-4 text-right font-semibold text-gray-600 not-italic">— Jamie L., Healthcare Administrator</footer>
           </blockquote>
         </div>
