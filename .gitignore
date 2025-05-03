@@ -42,3 +42,14 @@ backend/.env
 frontend/node_modules/
 frontend/.env
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
