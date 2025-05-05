@@ -1,3 +1,26 @@
+Login as Ubuntu
+
+cd /var/www/jobspeak/JobSpeak/backend
+source venv/bin/activate
+
+Check status:
+sudo systemctl status
+
+the service running your Django application via Gunicorn
+You also have a background task runner
+And Nginx running as a reverse proxy
+
+Restart Gunicorn: 
+sudo systemctl restart gunicorn-jobspeak.service
+
+Restart the Background Task Runner:
+sudo systemctl restart background-tasks-jobspeak.service
+
+Check Status:
+sudo systemctl status gunicorn-jobspeak.service
+sudo systemctl status background-tasks-jobspeak.service
+
+
 # Hosting Guide: Django Backend on Lightsail + React Frontend on Amplify
 
 This guide outlines the steps to deploy the Django backend to AWS Lightsail and the React (Vite) frontend to AWS Amplify.
@@ -64,6 +87,8 @@ This guide outlines the steps to deploy the Django backend to AWS Lightsail and 
 10. **Configure Django for Production:**
     *   **Create `.env` file:** In `/var/www/jobspeak/JobSpeakV2/backend/` directory (next to `manage.py`). **DO NOT COMMIT TO GIT.** Fill it with your actual secrets:
         ```dotenv
+
+	Login as Ubuntu
 
         cd /var/www/jobspeak/JobSpeak/backend
 	source venv/bin/activate

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os # Import os module
+import dj_database_url
 from pathlib import Path
 from datetime import timedelta # Keep existing timedelta import
 # from storages.backends.s3boto3 import S3Boto3Storage # Can likely remove this too if not used elsewhere directly
@@ -33,12 +34,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-!)o=ehnlhi2tcmzw+dq_s7kcxxva)3y6wr3wp*s1z##t8rqnuw'
+SECRET_KEY = os.getenv('SECRET_KEY') # Use the key name from your .env
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+#print(f"DEBUG settings.py: ALLOWED_HOSTS = {ALLOWED_HOSTS}")
 
 
 # Application definition
@@ -105,18 +107,14 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+'default': dj_database_url.config(default=os.getenv('DATABASE_URL'), conn_max_age=600)
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
+# Password validation 
+
+AUTH_PASSWORD_VALIDATORS = [ {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
@@ -147,12 +145,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Keep MEDIA_ROOT for potential local fallbacks or other uses, but S3 will be default
 MEDIA_ROOT = BASE_DIR / 'media' 
 # MEDIA_URL will be overridden by S3 settings below
 
 # CORS Settings (Allow all origins for development)
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
 # Alternatively, for more specific control:
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:3000", # Example: Allow your React frontend development server
@@ -262,19 +262,3 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 # --- End Allauth Settings --- 
-
-# Add your frontend development server origin here
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173', # Vite/React dev server
-    'http://127.0.0.1:5173', # Sometimes needed as well
-    # Add other trusted origins if necessary (e.g., your production frontend URL)
-]
-
-# Ensure CORS settings are also appropriate if you haven't configured them
-# Example (adjust as needed):
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:5173",
-#     "http://127.0.0.1:5173",
-# ]
-# Or allow all for development (less secure):
-# CORS_ALLOW_ALL_ORIGINS = True
