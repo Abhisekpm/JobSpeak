@@ -9,7 +9,7 @@ import AnalysisPanel from "./AnalysisPanel";
 import RecapView from "./RecapView"; // Import the new RecapView component
 import SummaryView from "./SummaryView"; // Import the new SummaryView component
 import CoachingView from "./CoachingView"; // Import the new CoachingView component
-import { ArrowLeft, Share2, Download, Play, Pause, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Download, Play, Pause, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "./ui/use-toast"; // Import toast
 import { Loader2, AlertTriangle, Info } from "lucide-react";
 import {
@@ -17,6 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "./ui/dropdown-menu";
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
@@ -72,9 +73,10 @@ const ConversationDetail: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // State for active tab
-  const [activeTab, setActiveTab] = useState<string>("transcript"); 
+  // State for active tab - Set default to 'recap'
+  const [activeTab, setActiveTab] = useState<string>("recap"); 
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -402,48 +404,60 @@ const ConversationDetail: React.FC = () => {
   // Function to handle audio download
   const handleAudioDownload = async () => {
     if (!conversation?.id) return;
-    
     setIsDownloading(true);
-    
+    toast({ title: "Preparing download..." }); // Simplified initial toast
     try {
-      // Show loading toast
-      toast({
-        title: "Preparing download...",
-        description: "We're generating a secure download link for you.",
-      });
-      
-      // Request a download URL from the backend
       const response = await apiClient.get(`/conversations/${conversation.id}/download_audio/`);
-      
       if (response.data && response.data.download_url) {
-        // Create a temporary link element
         const downloadLink = document.createElement('a');
         downloadLink.href = response.data.download_url;
-        downloadLink.target = '_blank';
-        downloadLink.download = `${conversation.name || 'audio'}.mp3`;
-        
-        // Trigger the download
+        downloadLink.target = '_blank'; // Optional: open in new tab if browser blocks direct download
+        downloadLink.download = `${conversation.name || 'audio'}.mp3`; // Default filename
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
-        
-        // Show success toast
-        toast({
-          title: "Download started",
-          description: "Your audio file download has started.",
-        });
+        toast({ title: "Download started" });
       } else {
-        throw new Error("No download URL returned");
+        throw new Error("No download URL returned from server.");
       }
     } catch (err: any) {
       console.error("Error downloading audio:", err);
       toast({
         title: "Download failed",
-        description: err.response?.data?.error || "Could not download the audio file.",
+        description: err.response?.data?.error || err.message || "Could not download the audio file.",
         variant: "destructive",
       });
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!conversation) return;
+    if (!window.confirm("Are you sure you want to delete this conversation? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await apiClient.delete(`/conversations/${conversation.id}/`);
+      toast({
+        title: "Conversation Deleted",
+        description: `Conversation "${conversation.name}" has been successfully deleted.`,
+        variant: "default",
+      });
+      navigate("/home");
+    } catch (err: any) {
+      console.error("Error deleting conversation:", err);
+      toast({
+        title: "Error Deleting Conversation",
+        description:
+          err.response?.data?.detail ||
+          err.message ||
+          "Failed to delete conversation. Please try again.",
+        variant: "destructive",
+      });
+      setIsDeleting(false);
     }
   };
 
@@ -500,75 +514,64 @@ const ConversationDetail: React.FC = () => {
   // --- End Parsing --- 
 
   return (
-    <div className="flex flex-col h-full w-full bg-gray-50 p-4 md:p-6">
-      {/* Change preload to "auto" */}
-      <audio ref={audioRef} preload="auto" />
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-lg shadow-sm">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleBack} className="mr-2" aria-label="Go back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            {isEditingTitle ? (
-                <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={editedTitle}
-                    onChange={handleTitleInputChange}
-                    onBlur={handleTitleInputBlur}
-                    onKeyDown={handleTitleInputKeyDown}
-                    onClick={(e) => e.stopPropagation()} // Prevent triggering other clicks
-                    className="text-xl font-semibold bg-transparent border-b border-primary focus:outline-none w-full px-1 py-0.5 -my-0.5" // Adjusted styles
-                    aria-label="Edit conversation title"
-                    autoComplete="off"
-                />
-            ) : (
-                <h1
-                    onClick={handleTitleClick}
-                    className="text-2xl font-bold truncate cursor-pointer hover:text-primary px-1 py-0.5 -my-0.5" // Adjusted styles & added padding like input
-                    title={conversation.name} // Show full title on hover
-                >
-                    {conversation.name}
-                </h1>
-            )}
-            <div className="flex items-center text-gray-500 text-sm mt-1">
-              <span>{date}</span>
-              <span className="mx-2">•</span>
-              <span>{formatDuration(currentDuration)}</span>
-            </div>
+    <div className="flex flex-col h-screen bg-gray-50 p-0 md:p-6 overflow-hidden">
+      {/* Header Section */}
+      <header className="flex items-center justify-between mb-2 md:mb-6 bg-white md:bg-transparent p-4 md:p-0 border-b md:border-b-0">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center space-x-2">
+          {isEditingTitle ? (
+              <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={editedTitle}
+                  onChange={handleTitleInputChange}
+                  onBlur={handleTitleInputBlur}
+                  onKeyDown={handleTitleInputKeyDown}
+                  onClick={(e) => e.stopPropagation()} // Prevent triggering other clicks
+                  className="text-xl font-semibold bg-transparent border-b border-primary focus:outline-none w-full px-1 py-0.5 -my-0.5" // Adjusted styles
+                  aria-label="Edit conversation title"
+                  autoComplete="off"
+              />
+          ) : (
+              <h1
+                  onClick={handleTitleClick}
+                  className="text-2xl font-bold truncate cursor-pointer hover:text-primary px-1 py-0.5 -my-0.5" // Adjusted styles & added padding like input
+                  title={conversation.name} // Show full title on hover
+              >
+                  {conversation.name}
+              </h1>
+          )}
+          <div className="flex items-center text-gray-500 text-sm mt-1">
+            <span>{date}</span>
+            <span className="mx-2">•</span>
+            <span>{formatDuration(currentDuration)}</span>
           </div>
         </div>
-        <div className="flex gap-2 mt-4 md:mt-0">
-          {/* --- Share Button Removed --- */}
-          {/* <Button variant="outline" size="sm">
-            <Share2 className="h-4 w-4 mr-2" />
-            Share
-          </Button> */}
-          {/* --- END OF SHARE BUTTON --- */}
-
-          {/* --- Download Button (remains) --- */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleAudioDownload}
-            disabled={isDownloading || !conversation.audio_file}
-          >
-            {isDownloading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                Download
-              </>
-            )}
-          </Button>
+        <div className="flex items-center space-x-2">
+          {/* More Actions Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {/* Download Menu Item ADDED */}
+              <DropdownMenuItem onClick={handleAudioDownload} disabled={isDownloading || !conversation?.audio_file}>
+                {isDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                <span>Download Audio</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleDeleteConversation} disabled={isDeleting} className="text-red-600 hover:!text-red-600 hover:!bg-red-50 focus:!text-red-600 focus:!bg-red-50">
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                <span>Delete Conversation</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </div>
+      </header>
 
       {/* Audio Player */}
       <Card className="p-4 mb-6 bg-white shadow-sm">
@@ -603,27 +606,21 @@ const ConversationDetail: React.FC = () => {
       </Card>
 
       {/* Tabs for Views */}
-      {/* Set default tab to 'transcript' */}
       <Tabs 
         value={activeTab} 
         onValueChange={setActiveTab} 
         className="flex-1 flex flex-col overflow-hidden min-h-0"
       >
-        {/* Use justify-between to push dropdown to the right */}
         <TabsList className="flex justify-between items-center gap-2 mb-6 shrink-0">
-          {/* Visible Tabs */}
+          {/* Main Visible Tabs */}
           <div className="flex items-center gap-2">
-            <TabsTrigger value="transcript">Transcript</TabsTrigger>
             <TabsTrigger value="recap">Recap</TabsTrigger>
-            {/* Make Summary always visible */}
-            <TabsTrigger value="summary">Summary</TabsTrigger> 
-            {/* Hidden on small screens, visible on medium and up */}
-            <TabsTrigger value="coaching" className="hidden md:inline-flex">Coaching</TabsTrigger>
-            <TabsTrigger value="analysis" className="hidden md:inline-flex">Analysis</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="coaching">Coaching</TabsTrigger>
           </div>
 
-          {/* Dropdown Menu - Visible only on small screens */}
-          <div className="md:hidden"> {/* Hide on medium screens and up */}
+          {/* "More" Dropdown Menu - Always visible now */}
+          <div> {/* Removed md:hidden from this container */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -632,31 +629,24 @@ const ConversationDetail: React.FC = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {/* Remove Summary from dropdown */}
-                {/* <DropdownMenuItem 
-                  onSelect={() => setActiveTab('summary')} 
-                  disabled={activeTab === 'summary'}
-                >
-                  Summary
-                </DropdownMenuItem> */}
-                <DropdownMenuItem 
-                  onSelect={() => setActiveTab('coaching')} 
-                  disabled={activeTab === 'coaching'}
-                >
-                  Coaching
-                </DropdownMenuItem>
                 <DropdownMenuItem 
                   onSelect={() => setActiveTab('analysis')} 
                   disabled={activeTab === 'analysis'}
                 >
                   Analysis
                 </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onSelect={() => setActiveTab('transcript')} 
+                  disabled={activeTab === 'transcript'}
+                >
+                  Transcript
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </TabsList>
 
-        {/* Content sections remain - order in code doesn't affect display */}
+        {/* Content sections - Order in code doesn't affect display, value prop controls it */}
         <TabsContent value="analysis" className="flex-1 overflow-auto">
             <AnalysisPanel conversation={conversation} />
         </TabsContent>
@@ -673,12 +663,11 @@ const ConversationDetail: React.FC = () => {
             <SummaryView conversation={conversation} />
         </TabsContent>
         
-        {/* Update TabsContent value */}
         <TabsContent value="transcript" className="flex-1 overflow-auto">
           <TranscriptionView
             transcription={parsedTranscription}
-            status={conversation.status_transcription}
-            statusDisplay={conversation.status_transcription_display}
+            status={conversation?.status_transcription || "pending"}
+            statusDisplay={conversation?.status_transcription_display || "Pending"}
           />
         </TabsContent>
       </Tabs>

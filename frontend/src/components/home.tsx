@@ -189,33 +189,6 @@ const Home = () => {
     }
   };
 
-  const handleDeleteConversation = async (id: string | number) => {
-    const originalConversations = [...conversations]; // Keep original state for potential revert
-    // Optimistically update UI
-    setConversations((prevConversations) =>
-      prevConversations.filter((conv) => conv.id !== id)
-    );
-    console.log(`Deleted conversation ${id} (Optimistic UI)`);
-
-    try {
-      await apiClient.delete(`/conversations/${id}/`);
-      // Optionally show success toast
-      // toast({ title: "Conversation deleted.", variant: "destructive" });
-    } catch (err: any) {
-      console.error("Error deleting conversation:", err);
-      // Revert UI on error
-      setConversations(originalConversations);
-      toast({
-        title: "Error deleting conversation",
-        description:
-          err.response?.data?.detail ||
-          err.message ||
-          "Failed to delete conversation.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleViewDetails = (id: string | number) => {
     navigate(`/conversations/${String(id)}`);
   };
@@ -372,7 +345,6 @@ const Home = () => {
                     // Pass only status to the simplified preview function
                     createTranscriptionPreview(conv.status_transcription)
                   }
-                  onDelete={() => handleDeleteConversation(conv.id)}
                   onClick={() => handleViewDetails(conv.id)}
                 />
               ))}

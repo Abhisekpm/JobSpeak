@@ -16,78 +16,43 @@ interface ConversationCardProps {
   date?: string;
   duration?: string;
   previewText?: string;
-  onDelete?: () => void;
   onClick?: () => void;
   transcriptionPreview?: string;
 }
 
 const ConversationCard: React.FC<ConversationCardProps> = ({
   id,
-  title = "Team Weekly Standup",
-  date = "May 15, 2023",
-  duration = "32:45",
+  title = "Untitled Conversation",
+  date = "N/A",
+  duration = "--:--",
   previewText = "No preview available.",
-  onDelete = () => console.log("Delete clicked"),
-  onClick = () => console.log("Card clicked"),
+  onClick,
 }) => {
   return (
     <Card
-      className="h-[220px] bg-white hover:shadow-lg transition-shadow duration-300 cursor-pointer flex flex-col w-full"
+      className="flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer bg-white rounded-lg overflow-hidden"
       onClick={onClick}
     >
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle
-            className="text-lg font-bold truncate"
-            title={title}
-          >
-            {title}
-          </CardTitle>
-        </div>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5" />
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold text-gray-800 truncate">
+          {title}
+        </CardTitle>
+        <div className="flex items-center text-xs text-gray-500 mt-1 space-x-3">
+          <div className="flex items-center">
+            <Calendar className="w-3.5 h-3.5 mr-1" />
             <span>{date}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
+          <div className="flex items-center">
+            <Clock className="w-3.5 h-3.5 mr-1" />
             <span>{duration}</span>
           </div>
         </div>
       </CardHeader>
-
-      <CardContent className="flex-grow overflow-hidden">
-        <CardDescription className="line-clamp-4 text-sm text-gray-600">
+      <CardContent className="flex-grow pb-3">
+        <CardDescription className="text-sm text-gray-600 line-clamp-3">
           {previewText}
         </CardDescription>
       </CardContent>
-
-      <CardFooter className="border-t pt-3 flex justify-between items-center">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label="Delete conversation"
-        >
-          <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-500" />
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-        >
-          View Details
-        </Button>
-      </CardFooter>
     </Card>
   );
 };

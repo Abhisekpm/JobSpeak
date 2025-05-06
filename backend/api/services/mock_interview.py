@@ -4,7 +4,8 @@ Includes text extraction from files and interaction with LLMs.
 """
 import os
 import io
-import fitz  # PyMuPDF
+# import fitz  # PyMuPDF - Replaced with pypdf
+from pypdf import PdfReader # Added for PDF extraction
 from docx import Document # python-docx
 import google.generativeai as genai
 import requests # Import requests library
@@ -91,18 +92,21 @@ def extract_text_from_file(file_field: models.FileField) -> str:
         raise ValueError(f"An unexpected error occurred while processing file '{os.path.basename(file_name)}'.") from e
 
 def extract_text_from_pdf(file_content: bytes) -> str:
-    """Extracts text from PDF file content bytes."""
+    """Extracts text from PDF file content bytes using pypdf."""
     try:
-        doc = fitz.open(stream=file_content, filetype="pdf")
+        reader = PdfReader(io.BytesIO(file_content))
         text = ""
-        for page in doc:
-            text += page.get_text()
-        doc.close()
-        print(f"Successfully extracted text from PDF (length: {len(text)} characters).")
+        for page in reader.pages:
+            extracted_page_text = page.extract_text()
+            if extracted_page_text:
+                text += extracted_page_text
+        print(f"Successfully extracted text from PDF using pypdf (length: {len(text)} characters).")
         return text
     except Exception as e:
-        print(f"Error extracting text from PDF bytes: {e}")
-        raise ValueError(f"Failed to process PDF content: {e}") from e
+        print(f"Error extracting text from PDF bytes with pypdf: {e}")
+        # Consider if the original PyMuPDF error message was more specific
+        # and if a more generic one is okay here.
+        raise ValueError(f"Failed to process PDF content with pypdf: {e}") from e
 
 def extract_text_from_docx(file_content: bytes) -> str:
     """Extracts text from DOCX file content bytes."""
