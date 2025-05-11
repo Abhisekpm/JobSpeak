@@ -85,14 +85,14 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
               <TabsTrigger value="balanced" className="data-[state=active]:bg-white data-[state=active]:text-primary">Balanced</TabsTrigger>
               <TabsTrigger value="detailed" className="data-[state=active]:bg-white data-[state=active]:text-primary">Detailed</TabsTrigger>
             </TabsList>
-            <div className="flex-grow overflow-hidden mt-4">
-              <TabsContent value="short" className="h-full">
+            <div className="flex-grow min-h-0 relative mt-4">
+              <TabsContent value="short" className="absolute inset-0">
                 <SummaryDisplay text={summaryData.short} />
               </TabsContent>
-              <TabsContent value="balanced" className="h-full">
+              <TabsContent value="balanced" className="absolute inset-0">
                 <SummaryDisplay text={summaryData.balanced} />
               </TabsContent>
-              <TabsContent value="detailed" className="h-full">
+              <TabsContent value="detailed" className="absolute inset-0">
                 <SummaryDisplay text={summaryData.detailed} />
               </TabsContent>
             </div>
@@ -118,7 +118,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
   const SummaryDisplay: React.FC<{ text: string | null | undefined }> = ({ text }) => {
     if (text && text.trim() !== '') {
       return (
-        <ScrollArea className="bg-gray-50 rounded-md p-4 whitespace-pre-wrap h-full">
+        <ScrollArea className="h-full bg-gray-50 rounded-md p-4 whitespace-pre-wrap">
           {text}
         </ScrollArea>
       );
@@ -148,7 +148,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ conversation }) => {
       </div>
 
       {/* Content Area (will contain status or tabs) */}
-      <div className="flex-grow overflow-hidden">
+      <div className="flex-grow min-h-0 relative">
         {renderContent()}
       </div>
     </div>

@@ -67,7 +67,7 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
         // Use the transcription prop directly
         if (transcription && transcription.length > 0) {
           return (
-            <ScrollArea className="flex-grow bg-gray-50 rounded-md p-4">
+            <ScrollArea className="absolute inset-0 bg-gray-50 rounded-md p-4">
               {transcription.map((segment, index) => (
                 <div key={index} className="mb-3">
                   {/* Handle potential string/number speaker IDs */}
@@ -120,7 +120,7 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-grow overflow-hidden">
+      <div className="flex-grow min-h-0 relative">
         {renderContent()}
       </div>
     </div>

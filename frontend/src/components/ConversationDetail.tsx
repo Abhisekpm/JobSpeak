@@ -190,70 +190,101 @@ const ConversationDetail: React.FC = () => {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) {
-        console.log("Audio ref not available yet.");
-        return; // Exit if ref is not ready
+      console.log("Audio ref not available yet.");
+      return;
     }
 
-    // --- Set or Remove Audio Source --- 
-    let audioSrc: string | null = null;
+    let currentAudioSrc = audio.src;
+    let newAudioSrc: string | null = null;
+
     if (conversation?.audio_file) {
-        // Use the URL directly from the backend response
-        audioSrc = conversation.audio_file;
+      newAudioSrc = conversation.audio_file;
     }
 
-    if (audioSrc) {
-        if (audio.src !== audioSrc) {
-            console.log(`Setting audio source to: ${audioSrc}`);
-            setIsAudioReady(false);
-            audio.src = audioSrc;
-            audio.load();
-            console.log("Called audio.load()");
-        }
-    } else {
-        // Remove source if no URL and src currently exists
-        if (audio.src) {
-            console.log("Removing audio source.");
-            audio.removeAttribute('src');
-            audio.load(); // Important to reflect change
-            setIsAudioReady(false); // Reset readiness
-             // Reset playback state
-            setIsPlaying(false);
-            setCurrentTime(0);
-            setAudioDuration(0);
-        }
-    }
+    // --- Event Handlers ---
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     
-    // --- Add Event Listeners --- 
-    const handleTimeUpdate = () => { setCurrentTime(audio.currentTime); };
-    const handleLoadedMetadata = () => { 
-        console.log("Audio metadata loaded. Browser duration:", audio.duration);
+    const handleLoadedMetadata = () => {
+      console.log("Audio metadata loaded. Browser duration:", audio.duration);
+      const backendDuration = conversation?.duration;
+      if (backendDuration !== null && typeof backendDuration !== 'undefined' && Number.isFinite(backendDuration) && backendDuration > 0) {
+          setAudioDuration(backendDuration);
+      } else if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          setAudioDuration(audio.duration);
+      } else {
+          setAudioDuration(0); // Fallback
+      }
     };
-    const handleEnded = () => { setIsPlaying(false); setCurrentTime(0); };
-    const handleCanPlayThrough = () => { console.log("Audio can play through."); setIsAudioReady(true); };
-    // Add error handling listener
-    const handleError = (e: Event) => { 
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0); // Reset to start
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log("Audio can play through.");
+      setIsAudioReady(true);
+    };
+
+    const handleError = (e: Event) => {
       console.error("Audio Error:", e, audio.error);
-      setError("An error occurred trying to load or play the audio."); // Set user-facing error
-      setIsAudioReady(false); // Set to not ready on error
+      let errorMessage = "An error occurred trying to load or play the audio.";
+      if (audio.error) {
+          switch (audio.error.code) {
+              case MediaError.MEDIA_ERR_ABORTED:
+                  errorMessage = "Audio playback aborted.";
+                  break;
+              case MediaError.MEDIA_ERR_NETWORK:
+                  errorMessage = "A network error caused audio download to fail.";
+                  break;
+              case MediaError.MEDIA_ERR_DECODE:
+                  errorMessage = "Audio playback failed due to a decoding error.";
+                  break;
+              case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                  errorMessage = "Audio source not supported or audio format is invalid.";
+                  break;
+              default:
+                  errorMessage = "An unknown audio error occurred.";
+          }
+      }
+      setError(errorMessage);
+      setIsAudioReady(false);
+      setIsPlaying(false);
+    };
+
+    // --- Source Management ---
+    if (newAudioSrc && currentAudioSrc !== newAudioSrc) {
+      console.log(`Setting new audio source to: ${newAudioSrc}`);
+      audio.src = newAudioSrc;
+      setIsAudioReady(false);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      audio.load();
+    } else if (!newAudioSrc && currentAudioSrc) {
+      console.log("Removing audio source.");
+      audio.removeAttribute('src');
+      audio.load();
+      setIsAudioReady(false);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setAudioDuration(0);
     }
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('canplaythrough', handleCanPlayThrough);
-    audio.addEventListener('error', handleError); // Add error listener
+    audio.addEventListener('error', handleError);
 
-    // Cleanup listeners
     return () => {
-      console.log("Cleaning up audio listeners.");
+      console.log("Cleaning up audio listeners for source:", currentAudioSrc);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('canplaythrough', handleCanPlayThrough);
-      audio.removeEventListener('error', handleError); // Remove error listener
+      audio.removeEventListener('error', handleError);
     };
-    // Depend on conversation.audio_file to re-run when URL changes
-  }, [conversation?.audio_file]); 
+  }, [conversation?.audio_file, conversation?.duration]);
 
   // --- Inline Title Editing Logic ---
 
@@ -354,20 +385,28 @@ const ConversationDetail: React.FC = () => {
 
   const togglePlayback = () => {
     const audio = audioRef.current;
-    if (!audio || !audio.src) return;
+    if (!audio || !audio.src || !isAudioReady) {
+      console.warn("Audio not ready or no source. Cannot toggle playback.", { hasSrc: !!audio?.src, isAudioReady });
+      if (!audio?.src && conversation?.audio_file && audio) { // Check audio exists before setting src
+          audio.src = conversation.audio_file;
+          audio.load();
+      }
+      return;
+    }
 
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
     } else {
-      // Check our readiness state first
-      if (isAudioReady) {
-           audio.play()
-             .then(() => { setIsPlaying(true); })
-             .catch(error => { console.error("Error playing audio:", error); setIsPlaying(false); });
-      } else {
-          console.warn("Audio not ready according to 'canplaythrough' event yet.");
-      }
+      audio.play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(error => {
+          console.error("Error attempting to play audio:", error);
+          setIsPlaying(false);
+          setError("Could not start audio playback.");
+        });
     }
   };
 
@@ -574,6 +613,7 @@ const ConversationDetail: React.FC = () => {
       </header>
 
       {/* Audio Player */}
+      <audio ref={audioRef} preload="metadata" style={{ display: 'none' }} />
       <Card className="p-4 mb-6 bg-white shadow-sm">
         <div className="flex items-center gap-4">
           <Button
@@ -609,7 +649,7 @@ const ConversationDetail: React.FC = () => {
       <Tabs 
         value={activeTab} 
         onValueChange={setActiveTab} 
-        className="flex-1 flex flex-col overflow-hidden min-h-0"
+        className="flex-1 flex flex-col min-h-0"
       >
         <TabsList className="flex justify-between items-center gap-2 mb-6 shrink-0">
           {/* Main Visible Tabs */}

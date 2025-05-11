@@ -24,6 +24,9 @@ export default defineConfig({
     port: 5173,        // Keeps Vite on the same port
     strictPort: true,  // Prevents port switching
     cors: true,        // Allows cross-origin access
+    allowedHosts: [
+            // You can add more hosts here if needed, e.g., other ngrok URLs or custom local domains
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

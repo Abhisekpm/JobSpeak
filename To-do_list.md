@@ -260,42 +260,58 @@
 - [ ] Check download functionality for users with different permissions
 - [ ] Implement unit and integration tests
 
-## Phase 9: User Profile (Resume & Job Description)
+## Phase 9: Homepage UI Redesign (Tabbed Navigation)
 
-### Backend (Django)
-- [ ] Define `UserProfile` Model (`api/models.py`):
-  - [ ] Create `UserProfile` model.
-  - [ ] Add `OneToOneField` to `User` (`on_delete=CASCADE`).
-  - [ ] Add `resume` (`FileField`, `upload_to='resumes/%Y/%m/%d/'`, `null=True`, `blank=True`).
-  - [ ] Add `job_description` (`TextField`, `null=True`, `blank=True`).
-  - [ ] Add `__str__` method.
-- [ ] Implement Automatic Profile Creation (`api/signals.py`):
-  - [ ] Create `signals.py` if needed.
-  - [ ] Write `post_save` signal receiver for `User` creation.
-  - [ ] Connect signal in `api/apps.py` `ready()` method.
-- [ ] Admin Integration (`api/admin.py`):
-  - [ ] Register `UserProfile` model.
-- [ ] Migrations:
-  - [ ] Run `makemigrations api`.
-  - [ ] Run `migrate`.
-- [ ] Serializer (`api/serializers.py`):
-  - [ ] Create `UserProfileSerializer`.
-  - [ ] Include `resume` (consider `read_only` for list) and `job_description`.
-- [ ] API View (`api/views.py`):
-  - [ ] Create `UserProfileView` (e.g., `RetrieveUpdateAPIView`).
-  - [ ] Set queryset, serializer, permissions.
-  - [ ] Override `get_object` to fetch profile for `request.user`.
-- [ ] URL Routing (`api/urls.py`):
-  - [ ] Add URL pattern `/profile/` pointing to `UserProfileView`.
+### Phase 9.1: Core Structure and Tab Navigation
+1.  **Modify Homepage Component (`frontend/src/components/Home.tsx`)**:
+    *   Adapt `Home.tsx` to serve as the main container for the new tabbed layout.
+2.  **Implement Tab Navigation Bar (`TabNavigationBar.tsx`)**:
+    *   Create `TabNavigationBar.tsx` (e.g., in `frontend/src/components/ui/`).
+    *   Render two tabs: "Career Conversations" and "Mock Interviews".
+    *   Utilize `shadcn/ui` tab components (e.g., `Tabs, TabsList, TabsTrigger, TabsContent`) or build with Tailwind CSS.
+    *   Style the navigation bar to be sticky below the `MainHeader.tsx`.
+3.  **Manage Tab State in `Home.tsx`**:
+    *   Use `useState` for the active tab (e.g., `activeTab`).
+    *   Pass state and setter to `TabNavigationBar.tsx` for control and click handling.
+4.  **Conditional Content Rendering in `Home.tsx`**:
+    *   Render content for "Career Conversations" or "Mock Interviews" based on `activeTab`.
 
-### Frontend (React)
-- [ ] UI Implementation:
-  - [ ] Create "Profile" page/section (e.g., update Settings or new page).
-  - [ ] Add file input for resume upload.
-  - [ ] Add textarea for job description.
-- [ ] API Integration:
-  - [ ] Fetch profile data on component mount (`GET /api/profile/`).
-  - [ ] Implement save function (`PUT/PATCH /api/profile/` using `FormData`).
-- [ ] State Management:
-  - [ ] Manage state for resume filename/URL and job description.
-  - [ ] Handle loading and error states.
+### Phase 9.2: "Career Conversations" Tab Implementation
+1.  **Relocate/Contain Existing Logic**:
+    *   Ensure current conversation display, "Record" FAB, and recording modal logic from `Home.tsx` are rendered only when the "Career Conversations" tab is active.
+    *   Consider refactoring into a `CareerConversationsView.tsx` or use conditional blocks within `Home.tsx`.
+2.  **"No conversations" Message**:
+    *   Verify/implement display of `"No conversations recorded yet."` if the list is empty.
+
+### Phase 9.3: "Mock Interviews" Tab Implementation - Initial Setup
+1.  **Create `MockInterviewsView.tsx`**:
+    *   New component in `frontend/src/components/` to be rendered for the "Mock Interviews" tab.
+2.  **Display Past Mock Interviews (Placeholder)**:
+    *   Initially, show a placeholder list or a feature introduction message (e.g., `"Start your first mock interview to see it here!"`).
+3.  **"Practice" FAB**:
+    *   Add a FAB with "Practice" icon/label to `MockInterviewsView.tsx`.
+    *   This FAB will control the new mock interview setup modal.
+
+### Phase 9.4: Mock Interview Setup Modal
+1.  **Create `MockInterviewSetupModal.tsx`**:
+    *   New component in `frontend/src/components/`.
+    *   Use `shadcn/ui` modal components (e.g., `Dialog`) or build one.
+2.  **Modal Content**:
+    *   Sections for "Upload Resume" (`.pdf`, `.docx`) and "Upload Job Description" (`.pdf`, `.docx`, URL paste).
+    *   Include file input fields and a prominent "Start Interview" button.
+3.  **State Management for Modal**:
+    *   Manage open/closed state (in `MockInterviewsView.tsx` or `Home.tsx`).
+    *   Manage form data (resume, JD) within `MockInterviewSetupModal.tsx`.
+
+### Phase 9.5: Mock Interview Interface (Placeholder/Future)
+1.  **"Start Interview" Action**:
+    *   On click: Close modal, navigate to a new route (e.g., `/mock-interview/:id`) or display a placeholder interface in the "Mock Interviews" tab.
+2.  **Basic Interview UI (Initial)**:
+    *   Placeholder elements for question display, "Record Answer" button, and "Next Question" button.
+    *   (Actual recording and question fetching will be subsequent, backend-dependent tasks).
+
+### General Considerations for Phase 9
+*   **Component Reusability**: Reuse existing UI components where possible.
+*   **Styling**: Maintain consistency with Tailwind CSS and `shadcn/ui`.
+*   **API Endpoints (Future)**: Note that new backend endpoints will be needed for full mock interview functionality.
+*   **Error Handling & Loading States**: Plan for these as new functionalities are built out.
