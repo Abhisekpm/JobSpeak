@@ -283,12 +283,12 @@
 2.  **"No conversations" Message**:
     *   Verify/implement display of `"No conversations recorded yet."` if the list is empty.
 
-### Phase 9.3: "Mock Interviews" Tab Implementation - Initial Setup
-1.  **Create `MockInterviewsView.tsx`**:
+### Phase 9.3: "Mock Interviews" Tab Implementation - Initial Setup [x]
+1.  [x] **Create `MockInterviewsView.tsx`**:
     *   New component in `frontend/src/components/` to be rendered for the "Mock Interviews" tab.
-2.  **Display Past Mock Interviews (Placeholder)**:
+2.  [x] **Display Past Mock Interviews (Placeholder)**:
     *   Initially, show a placeholder list or a feature introduction message (e.g., `"Start your first mock interview to see it here!"`).
-3.  **"Practice" FAB**:
+3.  [x] **"Practice" FAB**:
     *   Add a FAB with "Practice" icon/label to `MockInterviewsView.tsx`.
     *   This FAB will control the new mock interview setup modal.
 

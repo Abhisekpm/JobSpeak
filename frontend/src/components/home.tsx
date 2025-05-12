@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
 import apiClient from "../lib/apiClient"; // Import the API client
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
@@ -9,9 +8,12 @@ import SearchFilter from "./SearchFilter"; // Import the SearchFilter component
 import { Button } from "./ui/button"; // Added for error display
 import { toast } from "./ui/use-toast"; // Assuming use-toast is setup (from shadcn/ui)
 import { useAuth } from "../contexts/AuthContext"; // <-- Corrected path
+import TabNavigationBar from "./ui/TabNavigationBar"; // Import the new TabNavigationBar
+import CareerConversationsView from "./CareerConversationsView"; // Import the new view
+import MockInterviewsView from "./MockInterviewsView"; // Import the new component
 
 // Define a type for the conversation object matching the backend model/serializer
-interface Conversation {
+export interface Conversation {
   id: number; // Django typically uses numbers for IDs
   name: string;
   created_at: string; // DRF DateTimeField usually serializes to ISO 8601 string
@@ -37,47 +39,66 @@ interface Conversation {
 }
 
 // Define filter options structure (now matches SearchFilter)
-interface FilterOptions {
+export interface FilterOptions {
   date?: string[]; // Array like ["Today", "This Month"]
   // duration removed
 }
 
 const Home = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user, loading } = useAuth(); // Access auth state
+  const { isAuthenticated, user, loading: authLoading } = useAuth(); // Renamed loading to authLoading for clarity
+  const [activeTab, setActiveTab] = useState<string>("conversations"); // Default to conversations tab
+
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For initial load
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true); // Specific loading for conversations
   const [isSaving, setIsSaving] = useState(false); // For save operation
-  const [error, setError] = useState<string | null>(null);
+  const [conversationError, setConversationError] = useState<string | null>(null); // Specific error for conversations
   const [searchTerm, setSearchTerm] = useState<string>(""); // State for search term
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({}); // State for active filters
 
   // Effect to fetch conversations from the API on component mount
   useEffect(() => {
-    if (!isAuthenticated && !loading) {
+    if (!isAuthenticated && !authLoading) {
       navigate("/login"); // Redirect to login if not authenticated
       return;
     }
 
-    const fetchConversations = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await apiClient.get<Conversation[]>("/conversations/");
-        setConversations(response.data);
-      } catch (err: any) {
-        console.error("Error fetching conversations:", err);
-        setError("Failed to load conversations. Please try again later.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (isAuthenticated) {
+    // Only fetch conversations if the conversations tab is active and user is authenticated
+    // We might move this fetch into a separate component for CareerConversationsView later
+    if (isAuthenticated && activeTab === "conversations") {
+      const fetchConversations = async () => {
+        setIsLoadingConversations(true);
+        setConversationError(null);
+        try {
+          const response = await apiClient.get<Conversation[]>("/conversations/");
+          // Ensure response.data is an array. If API returns an object with a 'results' array:
+          // setConversations(Array.isArray(response.data) ? response.data : response.data.results || []);
+          if (Array.isArray(response.data)) {
+            setConversations(response.data);
+          } else if (response.data && Array.isArray((response.data as any).results)) {
+            setConversations((response.data as any).results);
+          } else {
+            console.error("Unexpected response data format for conversations:", response.data);
+            setConversations([]); // Set to empty array on unexpected format
+            setConversationError("Failed to load conversations due to unexpected data format.");
+          }
+        } catch (err: any) {
+          console.error("Error fetching conversations:", err);
+          setConversationError("Failed to load conversations. Please try again later.");
+          setConversations([]); // Also set to empty on error
+        } finally {
+          setIsLoadingConversations(false);
+        }
+      };
       fetchConversations();
+    } else if (activeTab !== "conversations") {
+      // If not on conversations tab, clear conversations and loading state
+      setConversations([]);
+      setIsLoadingConversations(false);
+      setConversationError(null);
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [isAuthenticated, authLoading, navigate, activeTab]); // Add activeTab to dependency array
 
   // --- Handlers ---
 
@@ -127,7 +148,7 @@ const Home = () => {
       ]);
       setIsRecordingModalOpen(false); // Close modal on success
       // Optionally show a success toast
-      // toast({ title: "Conversation saved successfully!" });
+      toast({ title: "Conversation saved successfully!" });
     } catch (err: any) {
       console.error("Error saving conversation:", err);
       // Optionally show an error toast
@@ -249,122 +270,104 @@ const Home = () => {
     if (activeFilters.date && activeFilters.date.length > 0) {
       const createdAt = new Date(conv.created_at);
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Start of today
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
 
       let dateMatch = false;
-      for (const dateFilter of activeFilters.date) {
-        let startDate: Date | null = null;
-        let endDate: Date | null = null; // Use end date for ranges like This Week
-
-        switch (dateFilter) {
-          case "Today":
-            startDate = new Date(today);
-            endDate = new Date(today);
-            endDate.setHours(23, 59, 59, 999); // End of today
-            break;
-          case "This Week":
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-            // Or Monday: startDate.setDate(today.getDate() - (today.getDay() + 6) % 7);
-            endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 6);
-            endDate.setHours(23, 59, 59, 999); // End of week
-            break;
-          case "This Month":
-            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
-            endDate.setHours(23, 59, 59, 999);
-            break;
-          case "This Year":
-            startDate = new Date(today.getFullYear(), 0, 1);
-            endDate = new Date(today.getFullYear(), 11, 31);
-            endDate.setHours(23, 59, 59, 999);
-            break;
+      for (const filter of activeFilters.date) {
+        if (filter === "Today" && createdAt.toDateString() === today.toDateString()) {
+          dateMatch = true;
+          break;
         }
-
-        // Check if conversation date falls within the calculated range
         if (
-          startDate &&
-          endDate &&
-          !isNaN(startDate.getTime()) &&
-          !isNaN(endDate.getTime()) &&
-          createdAt >= startDate &&
-          createdAt <= endDate
+          filter === "This Month" &&
+          createdAt.getMonth() === currentMonth &&
+          createdAt.getFullYear() === currentYear
         ) {
           dateMatch = true;
-          break; // Found a match for one of the selected date filters
+          break;
         }
+        // Add more date filters here (e.g., "Last 7 days", "This Year")
       }
-      if (!dateMatch) return false; // No selected date ranges matched
+      if (!dateMatch) return false;
     }
-
-    // If all filters pass
     return true;
   });
 
-  // --- Render Logic ---
+  // --- Rendering Logic ---
+
+  // Show loading indicator if auth is loading or conversations are loading
+  if (authLoading || (isLoadingConversations && activeTab === "conversations")) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading...</p> {/* Replace with a proper spinner/loader component */}
+      </div>
+    );
+  }
+
+  // Display error message if an error occurred
+  if (conversationError && activeTab === "conversations") {
+    return (
+      <div className="container mx-auto p-4 text-center">
+        <p className="text-red-500">{conversationError}</p>
+        <Button onClick={() => { 
+          // Trigger refetch for conversations tab
+          if (activeTab === "conversations") {
+            // A bit of a hack to re-trigger useEffect, ideally fetchConversations would be callable
+            setConversations([]); // Temporarily clear to force loading state
+            setActiveTab(""); // Force tab change to re-trigger effect
+            setTimeout(() => setActiveTab("conversations"), 0);
+          } else {
+            navigate(0);
+          }
+        }} className="mt-4">
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+  
+  const renderMockInterviewsContent = () => (
+    <div className="container mx-auto p-4 text-center">
+      <h2 className="text-2xl font-semibold mb-4">Mock Interviews</h2>
+      <p className="text-gray-600">
+        Practice your interview skills by uploading your resume and a job description.
+        JobSpeak will generate tailored questions to help you prepare.
+      </p>
+      <p className="mt-4 text-gray-500">(Mock interview functionality coming soon!)</p>
+      {/* FAB for "Practice" will be added here in a later step */}
+    </div>
+  );
+
 
   return (
-    // Use a flex column layout for the overall page structure
     <div className="flex flex-col min-h-screen">
-      {/* Main content area */}
-      <main className="container mx-auto px-4 py-8 flex-grow">
-          {/* Search and Filter Bar */}
-          <div className="mb-6">
-            <SearchFilter
-              onSearchChange={handleSearchChange}
-              onFilter={handleFilterChange}
-            />
-          </div>
-
-          {/* Conversation Grid or Message */}
-          {isLoading ? (
-            <div className="text-center py-10">Loading conversations...</div>
-          ) : error ? (
-            <div className="text-center py-10 text-red-600">
-              <p>{error}</p>
-              <Button
-                onClick={() => window.location.reload()} // Simple retry
-                variant="outline"
-                className="mt-4"
-              >
-                Retry
-              </Button>
-            </div>
-          ) : filteredConversations.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredConversations.map((conv) => (
-                <ConversationCard
-                  key={conv.id}
-                  id={String(conv.id)}
-                  title={conv.name}
-                  date={formatDate(conv.created_at)}
-                  duration={formatDuration(conv.duration)}
-                  previewText={
-                    conv.summary_data?.short ??
-                    // Pass only status to the simplified preview function
-                    createTranscriptionPreview(conv.status_transcription)
-                  }
-                  onClick={() => handleViewDetails(conv.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-500">
-              No conversations found.
-            </div>
-          )}
+      {/* Assuming MainHeader is rendered by a parent layout component */}
+      {/* <MainHeader /> */}
+      <TabNavigationBar activeTab={activeTab} setActiveTab={setActiveTab} />
+      
+      <main className="flex-grow container mx-auto pt-4 px-4 pb-4 mt-4"> {/* Changed pt-8 to pt-4 */}
+        {/* Conditionally render content based on active tab */}
+        {activeTab === "conversations" && (
+          <CareerConversationsView
+            conversations={filteredConversations}
+            isLoading={isLoadingConversations}
+            isRecordingModalOpen={isRecordingModalOpen}
+            setIsRecordingModalOpen={setIsRecordingModalOpen}
+            isSaving={isSaving}
+            handleSearchChange={handleSearchChange}
+            handleFilterChange={handleFilterChange}
+            handleViewDetails={handleViewDetails}
+            handleSaveRecording={handleSaveRecording}
+            formatDate={formatDate}
+            formatDuration={formatDuration}
+            createTranscriptionPreview={createTranscriptionPreview}
+          />
+        )}
+        {activeTab === "mock-interviews" && (
+          <MockInterviewsView /> // Render the placeholder view
+        )}
       </main>
-        
-      {/* Modal and FAB are positioned fixed, so can be outside main */}
-      <RecordingModal
-        isOpen={isRecordingModalOpen}
-        onClose={() => setIsRecordingModalOpen(false)}
-        onSave={handleSaveRecording}
-        isSaving={isSaving}
-      />
-
-      <FloatingActionButton onFabClick={() => setIsRecordingModalOpen(true)} />
     </div>
   );
 };
