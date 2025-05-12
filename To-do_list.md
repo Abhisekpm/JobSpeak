@@ -292,14 +292,14 @@
     *   Add a FAB with "Practice" icon/label to `MockInterviewsView.tsx`.
     *   This FAB will control the new mock interview setup modal.
 
-### Phase 9.4: Mock Interview Setup Modal
-1.  **Create `MockInterviewSetupModal.tsx`**:
+### Phase 9.4: Mock Interview Setup Modal [x]
+1.  [x] **Create `MockInterviewSetupModal.tsx`**:
     *   New component in `frontend/src/components/`.
     *   Use `shadcn/ui` modal components (e.g., `Dialog`) or build one.
-2.  **Modal Content**:
+2.  [x] **Modal Content**:
     *   Sections for "Upload Resume" (`.pdf`, `.docx`) and "Upload Job Description" (`.pdf`, `.docx`, URL paste).
     *   Include file input fields and a prominent "Start Interview" button.
-3.  **State Management for Modal**:
+3.  [x] **State Management for Modal**:
     *   Manage open/closed state (in `MockInterviewsView.tsx` or `Home.tsx`).
     *   Manage form data (resume, JD) within `MockInterviewSetupModal.tsx`.
 

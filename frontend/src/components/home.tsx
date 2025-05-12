@@ -44,6 +44,12 @@ export interface FilterOptions {
   // duration removed
 }
 
+interface UserProfileData { // Define UserProfileData if not already defined globally
+  username: string;
+  resume: string | null;
+  job_description: string | null;
+}
+
 const Home = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user, loading: authLoading } = useAuth(); // Renamed loading to authLoading for clarity
@@ -56,6 +62,10 @@ const Home = () => {
   const [conversationError, setConversationError] = useState<string | null>(null); // Specific error for conversations
   const [searchTerm, setSearchTerm] = useState<string>(""); // State for search term
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({}); // State for active filters
+
+  const [profileResumeUrl, setProfileResumeUrl] = useState<string | null>(null);
+  const [profileJdUrl, setProfileJdUrl] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   // Effect to fetch conversations from the API on component mount
   useEffect(() => {
@@ -294,6 +304,50 @@ const Home = () => {
     return true;
   });
 
+  const fetchProfileForMockInterview = async () => {
+    if (!isAuthenticated) return; // Should be authenticated to have a profile
+    setIsLoadingProfile(true);
+    console.log("Fetching profile for mock interview setup...");
+    try {
+      const response = await apiClient.get<UserProfileData>("/profile/");
+      setProfileResumeUrl(response.data.resume);
+      setProfileJdUrl(response.data.job_description);
+      console.log("Profile for mock interview fetched:", response.data);
+      return response.data; // Return data for immediate use
+    } catch (err) {
+      console.error("Error fetching profile for mock interview:", err);
+      // Don't block modal opening, just won't pre-fill
+      toast({
+        title: "Could not load saved documents",
+        description: "Unable to fetch your saved resume/JD. You can still upload new ones.",
+        variant: "default", // Or "warning" if you have one
+      });
+      setProfileResumeUrl(null);
+      setProfileJdUrl(null);
+      return null;
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  const handleOpenMockInterviewSetup = async () => {
+    await fetchProfileForMockInterview();
+    // This state is for the modal in CareerConversationsView, we need one for MockInterviewsView
+    // setIsRecordingModalOpen(true); // This is WRONG, this is for the recording modal.
+    // We need to trigger the modal in MockInterviewsView.
+    // This suggests that the modal state and opening logic should be in Home.tsx
+    // or MockInterviewsView needs to handle its own modal opening after profile fetch.
+
+    // For now, let's assume MockInterviewsView will handle its own modal state
+    // and Home.tsx will just pass the profile data.
+    // The actual opening of the modal will be triggered by a click in MockInterviewsView.
+    // So, this function might not be directly used to *open* the modal from Home,
+    // but rather, the profile data needs to be available to MockInterviewsView.
+
+    // Let's refine: MockInterviewsView needs these URLs when its FAB is clicked.
+    // The fetch should happen *before* MockInterviewsView tries to open its modal.
+  };
+
   // --- Rendering Logic ---
 
   // Show loading indicator if auth is loading or conversations are loading
@@ -365,7 +419,12 @@ const Home = () => {
           />
         )}
         {activeTab === "mock-interviews" && (
-          <MockInterviewsView /> // Render the placeholder view
+          <MockInterviewsView
+            profileResumeUrl={profileResumeUrl}
+            profileJdUrl={profileJdUrl}
+            fetchProfileForMockInterview={fetchProfileForMockInterview}
+            isLoadingProfile={isLoadingProfile}
+          />
         )}
       </main>
     </div>
