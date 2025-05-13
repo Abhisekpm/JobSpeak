@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "./ui/dropdown-menu";
+import useMediaQuery from "../hooks/useMediaQuery"; // Import the new hook
 
 // Interface should match the data structure returned by the /api/conversations/{id}/ endpoint
 interface TranscriptionSegment {
@@ -77,6 +78,7 @@ const ConversationDetail: React.FC = () => {
 
   // State for active tab - Set default to 'recap'
   const [activeTab, setActiveTab] = useState<string>("recap"); 
+  const isMobileView = useMediaQuery('(max-width: 768px)'); // Use md breakpoint
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -657,33 +659,43 @@ const ConversationDetail: React.FC = () => {
             <TabsTrigger value="recap">Recap</TabsTrigger>
             <TabsTrigger value="summary">Summary</TabsTrigger>
             <TabsTrigger value="coaching">Coaching</TabsTrigger>
+            {!isMobileView && (
+              <>
+                <TabsTrigger value="analysis">Analysis</TabsTrigger>
+                <TabsTrigger value="transcript">Transcript</TabsTrigger>
+              </>
+            )}
           </div>
 
-          {/* "More" Dropdown Menu - Always visible now */}
-          <div> {/* Removed md:hidden from this container */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreHorizontal className="h-4 w-4" />
-                  <span className="sr-only">More tabs</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem 
-                  onSelect={() => setActiveTab('analysis')} 
-                  disabled={activeTab === 'analysis'}
-                >
-                  Analysis
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onSelect={() => setActiveTab('transcript')} 
-                  disabled={activeTab === 'transcript'}
-                >
-                  Transcript
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {/* "More" Dropdown Menu - Only for mobile or if needed */} 
+          {isMobileView && (
+            <div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">More tabs</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {/* These items are now conditionally in tabs on wider screens */}
+                  {/* Consider if these should always be in dropdown or only when not a tab */}
+                  <DropdownMenuItem 
+                    onSelect={() => setActiveTab('analysis')} 
+                    disabled={activeTab === 'analysis'}
+                  >
+                    Analysis
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onSelect={() => setActiveTab('transcript')} 
+                    disabled={activeTab === 'transcript'}
+                  >
+                    Transcript
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </TabsList>
 
         {/* Content sections - Order in code doesn't affect display, value prop controls it */}

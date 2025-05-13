@@ -5,9 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, X, Upload, Loader2, FileText, CircleHelp, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { useTheme } from "next-themes";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import apiClient from '../lib/apiClient'; // Import apiClient
 import { toast } from "../components/ui/use-toast"; // Import toast
@@ -21,7 +19,6 @@ interface UserProfileData {
 const SettingsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
 
   // State for file selection (local temporary state)
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -46,8 +43,6 @@ const SettingsPage: React.FC = () => {
   // Refs for file inputs
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const jdInputRef = useRef<HTMLInputElement>(null);
-
-  const isDarkMode = theme === 'dark';
 
   // --- Fetch Profile Data --- 
   const fetchProfile = useCallback(async () => {
@@ -86,10 +81,6 @@ const SettingsPage: React.FC = () => {
 
   const handleClose = () => {
     navigate('/');
-  };
-
-  const handleThemeChange = (checked: boolean) => {
-    setTheme(checked ? 'dark' : 'light');
   };
 
   // Function to upload a single file immediately
@@ -266,30 +257,6 @@ const SettingsPage: React.FC = () => {
             <span className="text-sm">{user.email}</span>
           </div>
           {/* Add more user details here if needed, e.g., Name, ID */}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>App Settings</CardTitle>
-          <CardDescription>Configure application preferences.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between space-x-2">
-            <Label htmlFor="dark-mode-toggle" className="flex flex-col space-y-1">
-              <span>Dark Mode</span>
-              <span className="font-normal leading-snug text-muted-foreground">
-                Enable dark theme for the application.
-              </span>
-            </Label>
-            <Switch 
-              id="dark-mode-toggle" 
-              checked={isDarkMode}
-              onCheckedChange={handleThemeChange}
-              aria-label="Toggle dark mode"
-            />
-          </div>
-          {/* Placeholder for future settings controls */}
         </CardContent>
       </Card>
 

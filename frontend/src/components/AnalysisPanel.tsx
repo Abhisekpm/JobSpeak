@@ -98,75 +98,73 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ conversation }) => {
           Conversation Analysis
         </CardTitle>
       </CardHeader>
-      <div className="flex-grow min-h-0 relative">
-        <ScrollArea className="absolute inset-0">
-          <CardContent className="pt-4 pb-6 px-6">
-            <div className="space-y-6">
-              {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    Talk Time Distribution
-                  </h3>
-                  <div className="space-y-3">
-                    {Object.entries(talk_time_ratio).map(([speaker, percentage]) => (
-                      <div key={speaker} className="space-y-1">
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="capitalize">{speaker.replace('_', ' ')}</span>
-                          <span>{percentage}%</span>
-                        </div>
-                        <Progress value={percentage} className="h-2" />
+      <ScrollArea className="flex-grow min-h-0">
+        <CardContent className="pt-4 pb-6 px-6">
+          <div className="space-y-6">
+            {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  Talk Time Distribution
+                </h3>
+                <div className="space-y-3">
+                  {Object.entries(talk_time_ratio).map(([speaker, percentage]) => (
+                    <div key={speaker} className="space-y-1">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="capitalize">{speaker.replace('_', ' ')}</span>
+                        <span>{percentage}%</span>
                       </div>
-                    ))}
-                  </div>
+                      <Progress value={percentage} className="h-2" />
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && sentiment && <Separator className="my-4" />}
+            {talk_time_ratio && Object.keys(talk_time_ratio).length > 0 && sentiment && <Separator className="my-4" />}
 
-              {sentiment && (
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    Overall Sentiment
-                  </h3>
-                  <div className="flex items-start gap-3 p-3 rounded-md border bg-muted/50">
-                     <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                     <div>
-                         <p className="text-sm font-medium">{sentiment.label || "Unknown"}</p>
-                         <p className="text-sm text-muted-foreground italic">
-                             {sentiment.reasoning || "No reasoning provided."}
-                         </p>
-                     </div>
-                  </div>
+            {sentiment && (
+              <div>
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  Overall Sentiment
+                </h3>
+                <div className="flex items-start gap-3 p-3 rounded-md border bg-muted/50">
+                   <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                   <div>
+                       <p className="text-sm font-medium">{sentiment.label || "Unknown"}</p>
+                       <p className="text-sm text-muted-foreground italic">
+                           {sentiment.reasoning || "No reasoning provided."}
+                       </p>
+                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {sentiment && topics && topics.length > 0 && <Separator className="my-4" />}
+            {sentiment && topics && topics.length > 0 && <Separator className="my-4" />}
 
-              {topics && topics.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                    <List className="h-4 w-4 text-muted-foreground" />
-                    Key Topics Identified
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {topics.map((topic, index) => (
-                      <Badge
-                        key={index}
-                        variant="secondary"
-                        className="py-1 px-2 text-xs font-normal"
-                      >
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
+            {topics && topics.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                  <List className="h-4 w-4 text-muted-foreground" />
+                  Key Topics Identified
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {topics.map((topic, index) => (
+                    <Badge
+                      key={index}
+                      variant="secondary"
+                      className="py-1 px-2 text-xs font-normal"
+                    >
+                      {topic}
+                    </Badge>
+                  ))}
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </ScrollArea>
-      </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </ScrollArea>
     </Card>
   );
 };

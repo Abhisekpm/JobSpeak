@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, ChangeEvent } from 'react';
 import apiClient from '../lib/apiClient';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Loader2, Upload, FileText, CircleHelp, Trash2 } from "lucide-react";
+import { Terminal, Loader2, Upload, FileText, CircleHelp, Trash2, X, Copy } from "lucide-react";
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ const MockInterviewPage: React.FC = () => {
 
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const jdInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const fetchProfile = useCallback(async () => {
     console.log("Fetching user profile for mock interview page...");
@@ -201,14 +202,50 @@ const MockInterviewPage: React.FC = () => {
       fetchQuestions();
   };
 
+  const handleCopyQuestions = async () => {
+    if (questions.length === 0) {
+      toast({
+        title: "No Questions to Copy",
+        description: "Please generate questions first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(questionsText);
+      toast({
+        title: "Questions Copied!",
+        description: "The generated questions have been copied to your clipboard.",
+      });
+    } catch (err) {
+      console.error("Failed to copy questions: ", err);
+      toast({
+        title: "Copy Failed",
+        description: "Could not copy questions to clipboard. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const isGenerateDisabled = isLoadingQuestions || isProfileLoading || !currentResumeUrl || !currentJdUrl;
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <div className="container mx-auto px-4 py-8 space-y-6 relative">
+      <Button 
+        asChild 
+        variant="ghost" 
+        size="icon" 
+        className="absolute top-4 right-4 text-muted-foreground hover:text-destructive z-10"
+        aria-label="Close Mock Interview Page"
+      >
+        <Link to="/">
+          <X className="h-6 w-6" />
+        </Link>
+      </Button>
+
       <Card>
-        <CardHeader>
-            </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="px-6 py-4 space-y-4">
            {isProfileLoading && (
              <div className="flex items-center text-sm text-muted-foreground">
                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -286,7 +323,15 @@ const MockInterviewPage: React.FC = () => {
 
       <div className="mt-6">
           {hasAttemptedGeneration && (
-             <h2 className="text-xl font-semibold tracking-tight mb-4">Generated Questions</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold tracking-tight">Generated Questions</h2>
+              {questions.length > 0 && !isLoadingQuestions && !questionError && (
+                <Button onClick={handleCopyQuestions} variant="outline" size="sm">
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
+              )}
+            </div>
           )}
 
           {isLoadingQuestions && (
