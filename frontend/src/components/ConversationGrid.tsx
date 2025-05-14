@@ -190,7 +190,6 @@ const ConversationGrid: React.FC<ConversationGridProps> = ({
               duration={conversation.duration}
               transcriptionPreview={conversation.transcriptionPreview}
               onClick={() => onConversationClick(conversation.id)}
-              onDelete={() => onDelete(conversation.id)}
             />
           ))}
         </div>
