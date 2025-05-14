@@ -50,7 +50,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
       </CardHeader>
       <CardContent className="flex-grow pb-3">
         <CardDescription className="text-sm text-gray-600 line-clamp-3">
-          {previewText}
+          {previewText || "No transcription data"}
         </CardDescription>
       </CardContent>
     </Card>

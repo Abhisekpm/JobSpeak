@@ -558,10 +558,10 @@ const ConversationDetail: React.FC = () => {
     <div className="flex flex-col h-screen bg-gray-50 p-0 md:p-6 overflow-hidden">
       {/* Header Section */}
       <header className="flex items-center justify-between mb-2 md:mb-6 bg-white md:bg-transparent p-4 md:p-0 border-b md:border-b-0">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2 flex-shrink-0">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-grow min-w-0 mx-2">
           {isEditingTitle ? (
               <input
                   ref={titleInputRef}
@@ -590,7 +590,7 @@ const ConversationDetail: React.FC = () => {
             <span>{formatDuration(currentDuration)}</span>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-shrink-0">
           {/* More Actions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -30,7 +30,7 @@ interface CareerConversationsViewProps {
   // Helper functions that might be passed or re-imported
   formatDate: (dateString: string) => string;
   formatDuration: (seconds: number | null | undefined) => string;
-  createTranscriptionPreview: (status: string | undefined) => string;
+  createTranscriptionPreview: (conversation: Conversation) => string;
 }
 
 const CareerConversationsView: React.FC<CareerConversationsViewProps> = ({
@@ -52,16 +52,6 @@ const CareerConversationsView: React.FC<CareerConversationsViewProps> = ({
   // This component can show a loading state specifically for its content if needed,
   // but Home.tsx already has a more general loading for auth and initial conversation load.
 
-  // If isLoading (for conversations) is true, Home.tsx might already show a global loader.
-  // However, if we want a more localized loading message *within* this tab after initial load:
-  // if (isLoading) {
-  //   return (
-  //     <div className="text-center py-10">
-  //       <p>Loading conversations...</p>
-  //     </div>
-  //   );
-  // }
-
   return (
     <>
       <SearchFilter
@@ -82,7 +72,7 @@ const CareerConversationsView: React.FC<CareerConversationsViewProps> = ({
               title={conv.name}
               date={formatDate(conv.created_at)}
               duration={formatDuration(conv.duration)}
-              previewText={createTranscriptionPreview(conv.status_transcription)}
+              previewText={createTranscriptionPreview(conv)}
               onClick={() => handleViewDetails(conv.id)}
             />
           ))}

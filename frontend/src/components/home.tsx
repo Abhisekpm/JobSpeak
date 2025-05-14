@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../lib/apiClient"; // Import the API client
 import FloatingActionButton from "./FloatingActionButton";
@@ -54,6 +54,7 @@ const Home = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user, loading: authLoading } = useAuth(); // Renamed loading to authLoading for clarity
   const [activeTab, setActiveTab] = useState<string>("conversations"); // Default to conversations tab
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Reference for polling interval
 
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -67,6 +68,36 @@ const Home = () => {
   const [profileJdUrl, setProfileJdUrl] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
+  // Function to check if any conversation is still processing
+  const checkForProcessingConversations = (conversations: Conversation[]): boolean => {
+    return conversations.some(conv => 
+      conv.status_transcription === 'processing' || 
+      conv.status_transcription === 'pending' || 
+      conv.status_recap === 'processing' || 
+      conv.status_recap === 'pending' || 
+      conv.status_summary === 'processing' || 
+      conv.status_summary === 'pending'
+    );
+  };
+
+  // Function to fetch and update a specific conversation
+  const fetchAndUpdateConversation = async (conversationId: number) => {
+    try {
+      const response = await apiClient.get<Conversation>(`/conversations/${conversationId}/`);
+      console.log(`Updated data for conversation ${conversationId}:`, response.data);
+      
+      // Update the specific conversation in state
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId ? response.data : conv
+      ));
+
+      return response.data;
+    } catch (err) {
+      console.error(`Error updating conversation ${conversationId}:`, err);
+      return null;
+    }
+  };
+
   // Effect to fetch conversations from the API on component mount
   useEffect(() => {
     if (!isAuthenticated && !authLoading) {
@@ -75,7 +106,6 @@ const Home = () => {
     }
 
     // Only fetch conversations if the conversations tab is active and user is authenticated
-    // We might move this fetch into a separate component for CareerConversationsView later
     if (isAuthenticated && activeTab === "conversations") {
       const fetchConversations = async () => {
         setIsLoadingConversations(true);
@@ -83,15 +113,21 @@ const Home = () => {
         try {
           const response = await apiClient.get<Conversation[]>("/conversations/");
           // Ensure response.data is an array. If API returns an object with a 'results' array:
-          // setConversations(Array.isArray(response.data) ? response.data : response.data.results || []);
+          let fetchedConversations: Conversation[] = [];
           if (Array.isArray(response.data)) {
-            setConversations(response.data);
+            fetchedConversations = response.data;
           } else if (response.data && Array.isArray((response.data as any).results)) {
-            setConversations((response.data as any).results);
+            fetchedConversations = (response.data as any).results;
           } else {
             console.error("Unexpected response data format for conversations:", response.data);
-            setConversations([]); // Set to empty array on unexpected format
             setConversationError("Failed to load conversations due to unexpected data format.");
+          }
+          
+          setConversations(fetchedConversations);
+          
+          // Start polling if there are any processing conversations
+          if (checkForProcessingConversations(fetchedConversations)) {
+            startPollingForUpdates(fetchedConversations);
           }
         } catch (err: any) {
           console.error("Error fetching conversations:", err);
@@ -107,8 +143,92 @@ const Home = () => {
       setConversations([]);
       setIsLoadingConversations(false);
       setConversationError(null);
+      
+      // Clear any existing polling interval when leaving the conversations tab
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     }
+    
+    // Cleanup function
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
   }, [isAuthenticated, authLoading, navigate, activeTab]); // Add activeTab to dependency array
+  
+  // Start polling for updates to processing conversations
+  const startPollingForUpdates = (conversations: Conversation[]) => {
+    // Clear any existing interval first
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    console.log("Starting to poll for conversation updates...");
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      // Get IDs of conversations that are still processing
+      const processingIds = conversations
+        .filter(conv => 
+          conv.status_transcription === 'processing' || 
+          conv.status_transcription === 'pending' || 
+          conv.status_recap === 'processing' || 
+          conv.status_recap === 'pending' || 
+          conv.status_summary === 'processing' || 
+          conv.status_summary === 'pending'
+        )
+        .map(conv => conv.id);
+      
+      if (processingIds.length === 0) {
+        // If no conversations are processing, stop polling
+        console.log("No conversations are processing, stopping poll.");
+        clearInterval(pollingIntervalRef.current!);
+        pollingIntervalRef.current = null;
+        return;
+      }
+      
+      console.log(`Polling for updates on ${processingIds.length} conversations:`, processingIds);
+      
+      // Fetch updates for each processing conversation
+      const updatedConvs = await Promise.all(
+        processingIds.map(id => fetchAndUpdateConversation(id))
+      );
+      
+      // Check if all processing is complete
+      const stillProcessing = updatedConvs.some(conv => 
+        conv && (
+          conv.status_transcription === 'processing' || 
+          conv.status_transcription === 'pending' || 
+          conv.status_recap === 'processing' || 
+          conv.status_recap === 'pending' || 
+          conv.status_summary === 'processing' || 
+          conv.status_summary === 'pending'
+        )
+      );
+      
+      if (!stillProcessing) {
+        console.log("All conversations finished processing, stopping poll.");
+        clearInterval(pollingIntervalRef.current!);
+        pollingIntervalRef.current = null;
+      }
+    }, 5000); // Poll every 5 seconds, same as ConversationDetail
+  };
+
+  // Add a special effect to start polling when a new recording is saved
+  useEffect(() => {
+    if (conversations.length > 0) {
+      // Check if any conversations are still processing
+      if (checkForProcessingConversations(conversations)) {
+        // Start polling for updates if not already polling
+        if (!pollingIntervalRef.current) {
+          startPollingForUpdates(conversations);
+        }
+      }
+    }
+  }, [conversations]); // This will run whenever conversations state changes
 
   // --- Handlers ---
 
@@ -150,12 +270,19 @@ const Home = () => {
           },
         }
       );
+      console.log("New conversation created, API response data:", response.data); // Log the response
 
       // Add the newly created conversation (from response) to the beginning of the list
       setConversations((prevConversations) => [
         response.data,
         ...prevConversations,
       ]);
+      
+      // New conversation will likely be in processing state, start polling
+      if (!pollingIntervalRef.current) {
+        startPollingForUpdates([response.data, ...conversations]);
+      }
+      
       setIsRecordingModalOpen(false); // Close modal on success
       // Optionally show a success toast
       toast({ title: "Conversation saved successfully!" });
@@ -247,23 +374,90 @@ const Home = () => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  // Helper function to create transcription preview - Simplified
-  const createTranscriptionPreview = (
-    status: string | undefined
-  ): string => {
-    switch (status) {
-        case 'processing':
-        case 'pending':
-          return "Processing...";
-        case 'completed':
-          // We know it's done, but don't have easy text access here
-          return "Transcription available."; 
-        case 'failed':
-          return "Transcription failed.";
-        default:
-          return "No transcription data.";
-      }
-    // Removed old logic using text.trim() / text.substring()
+  // Helper function to create transcription preview
+  const createTranscriptionPreview = (conversation: Conversation): string => {
+    // Check if conversation has required properties, handle missing properties gracefully
+    if (!conversation) {
+      return "Invalid conversation data";
+    }
+    
+    const { id, status_transcription, transcription_text, summary_data, status_transcription_display } = conversation;
+
+    // PRIORITY 1: Always check for short summary first, if it exists.
+    if (summary_data?.short) {
+      return summary_data.short || "Summary processing completed"; // Ensure non-empty return
+    }
+
+    // PRIORITY 2: Status-based logic if no short summary
+    switch (status_transcription) {
+      case 'processing':
+      case 'pending':
+        return `${status_transcription_display || status_transcription || "Processing"}...`; 
+      case 'completed':
+        // No summary_data.short, so try transcription_text
+        if (Array.isArray(transcription_text) && transcription_text.length > 0) {
+          try {
+            let preview = transcription_text
+              .slice(0, 2) // Take first 2 segments
+              .map(segment => {
+                if (!segment || typeof segment !== 'object') {
+                  return ""; // Handle invalid segment
+                }
+                return (segment as { transcript: string }).transcript || "";
+              }) // Type assertion
+              .filter(text => text.trim() !== '') // Remove empty segments
+              .join(' ');
+            
+            if (preview.trim() === '') {
+              return "View details for full transcription";
+            }
+            
+            return preview.substring(0, 100) + (preview.length > 100 ? '...' : '');
+          } catch (e) {
+            return "Transcription completed"; // Fallback for error case
+          }
+        } else if (typeof transcription_text === 'string' && transcription_text.trim() !== '') {
+          return transcription_text.substring(0, 100) + (transcription_text.length > 100 ? '...' : '');
+        }
+        return "View details for transcription"; // Fallback for 'completed' if no summary and no usable transcription text
+      case 'failed':
+        return "Transcription failed";
+      default:
+        // This case means status_transcription is not one of the above, or is null/undefined,
+        // AND summary_data.short was not available.
+        // As a last resort, if there's any transcription_text, try to use it.
+        if (Array.isArray(transcription_text) && transcription_text.length > 0) {
+          try {
+            let preview = transcription_text
+              .slice(0, 1)
+              .map(segment => {
+                if (!segment || typeof segment !== 'object') {
+                  return ""; // Handle invalid segment
+                }
+                return (segment as { transcript: string }).transcript || "";
+              })
+              .filter(text => text.trim() !== '')
+              .join(' ');
+            
+            if (preview.trim() === '') {
+              return "Processing transcription..."; // Fallback for empty preview
+            }
+            
+            return preview.substring(0, 70) + (preview.length > 70 ? '... (status unknown)' : ' (status unknown)');
+          } catch (e) { 
+            return "Processing audio..."; // Fallback for error
+          }
+        } else if (typeof transcription_text === 'string' && transcription_text.trim() !== '') {
+          return transcription_text.substring(0, 70) + (transcription_text.length > 70 ? '... (status unknown)' : ' (status unknown)');
+        }
+        
+        // Handle case where status might be null/undefined
+        if (!status_transcription) {
+          return "Recording saved, processing...";
+        }
+        
+        return "Processing transcription..."; // More friendly final fallback
+    }
   };
 
   // --- Filtering Logic --- Simplified
