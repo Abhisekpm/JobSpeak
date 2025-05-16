@@ -107,11 +107,21 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
   
   const clearJdFile = () => {
     setJdFile(null);
-    if (!jdUrl && initialJdUrl) setInitialJdFilename(getFilenameFromUrl(initialJdUrl)); // Keep initial if no URL
-    else if (!jdUrl) setInitialJdFilename("");
-    setUseExistingJd(!!initialJdUrl && !jdUrl); 
+    setInitialJdFilename(""); // Clear the display name completely
+    setUseExistingJd(false); // Stop using the existing JD file
+    
+    // Clear the file input if it exists
     const jdInput = document.getElementById('jd-file') as HTMLInputElement;
     if (jdInput) jdInput.value = "";
+    
+    // Also enable the URL input by ensuring jdUrl is empty if we're not already typing a URL
+    if (!jdUrl) {
+      // If no URL is being entered, make sure the URL field is enabled
+      const jdUrlInput = document.getElementById('jd-url') as HTMLInputElement;
+      if (jdUrlInput) jdUrlInput.disabled = false;
+    }
+    
+    console.log("JD file cleared", { useExistingJd: false, jdFile: null });
   }
 
   const handleJdUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,23 +163,27 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
       }
       onClose();
     }}>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="w-[calc(100vw-32px)] max-w-full p-4 sm:max-w-md md:max-w-lg lg:max-w-[500px] mx-auto sm:p-6">
         <DialogHeader>
-          <DialogTitle>Practice Mock Interview</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-lg font-semibold text-center break-words">Practice Mock Interview</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground text-center break-words">
             Upload your resume and the job description to get started.
             Your saved documents from Settings will be used if available.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <Label htmlFor="resume-file" className="text-left">
+          <Label htmlFor="resume-file" className="text-left font-medium">
             Resume
           </Label>
           {(useExistingResume && initialResumeFilename && !resumeFile) ? (
-            <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
-              <span className="text-sm truncate" title={initialResumeFilename}>{initialResumeFilename} </span>
-              <Button variant="ghost" size="sm" onClick={clearResume} title="Use a different resume">
-                <X className="h-4 w-4 mr-1" /> Change
+            <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50 overflow-hidden">
+              <div className="flex-grow min-w-0 mr-2">
+                <p className="text-sm text-foreground truncate" title={initialResumeFilename}>
+                  {initialResumeFilename}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={clearResume} title="Use a different resume" className="flex-shrink-0 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5 mr-1" /> Change
               </Button>
             </div>
           ) : (
@@ -195,14 +209,18 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             </div>
           </div>
 
-          <Label htmlFor="jd-file" className="text-left">
+          <Label htmlFor="jd-file" className="text-left font-medium">
             Upload JD File
           </Label>
           {(useExistingJd && initialJdFilename && !jdFile && !jdUrl) ? (
-             <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
-              <span className="text-sm truncate" title={initialJdFilename}>{initialJdFilename} </span>
-              <Button variant="ghost" size="sm" onClick={clearJdFile} title="Use a different JD file">
-                <X className="h-4 w-4 mr-1" /> Change
+             <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50 overflow-hidden">
+              <div className="flex-grow min-w-0 mr-2">
+                <p className="text-sm text-foreground truncate" title={initialJdFilename}>
+                  {initialJdFilename}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={clearJdFile} title="Use a different JD file" className="flex-shrink-0 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5 mr-1" /> Change
               </Button>
             </div>
           ) : (
@@ -220,7 +238,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
 
           <div className="text-center my-1 text-xs text-muted-foreground">OR</div>
 
-          <Label htmlFor="jd-url" className="text-left">
+          <Label htmlFor="jd-url" className="text-left font-medium">
             Paste JD URL
           </Label>
           <Input
@@ -231,9 +249,9 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             disabled={!!jdFile || (useExistingJd && !!initialJdFilename)}
           />
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" onClick={handleSubmit}>Start Interview</Button>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t sm:border-t-0 mt-2 sm:mt-0">
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button type="submit" onClick={handleSubmit} className="w-full sm:w-auto">Start Interview</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
