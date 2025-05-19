@@ -149,6 +149,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     job_description = serializers.FileField(required=False, allow_null=True, use_url=True)
     # Read-only field for the username, useful for context
     username = serializers.CharField(source='user.username', read_only=True)
+    # Add the new field for generated questions
+    generated_mock_questions = serializers.JSONField(read_only=True, required=False, allow_null=True)
 
     class Meta:
         model = UserProfile
@@ -156,7 +158,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'user', 
             'username', 
             'resume', 
-            'job_description'
+            'job_description',
+            'generated_mock_questions' # Add to fields list
         ]
         read_only_fields = ['user', 'username'] # User should not be changed here
 

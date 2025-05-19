@@ -177,6 +177,11 @@ class UserProfile(models.Model):
         blank=True,
         help_text="Uploaded job description file (PDF, DOCX, etc.)." # Updated help_text
     )
+    generated_mock_questions = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Generated mock interview questions based on resume and JD (stored as a list of strings)."
+    )
 
     def __str__(self):
         return f"Profile for {self.user.username}"

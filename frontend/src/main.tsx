@@ -15,7 +15,8 @@ if (!googleClientId) {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+  // Commenting out StrictMode temporarily for debugging
+  // <React.StrictMode>
     <NextThemesProvider attribute="class" defaultTheme="system" enableSystem storageKey="vite-ui-theme" forcedTheme="light">
       <GoogleOAuthProvider clientId={googleClientId || ""}>
         <BrowserRouter>
@@ -25,5 +26,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         </BrowserRouter>
       </GoogleOAuthProvider>
     </NextThemesProvider>
-  </React.StrictMode>,
+  // </React.StrictMode>,
+  ,
 )

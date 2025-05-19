@@ -248,70 +248,88 @@
   - [x] Add feedback during download (loading spinner/progress)
   - [x] Display appropriate error messages if download fails
 
-### AWS S3 Configuration
-- [x] Ensure proper CORS configuration for the S3 bucket:
-  - [x] Allow GET requests from frontend origin
-  - [x] Verify content-disposition headers are properly set for downloads
-  - [ ] Test with different audio file sizes
+## Phase 9: Mock Interview Question Generation & Persistence
 
-### Testing
-- [ ] Test download functionality with different browsers
-- [ ] Verify proper file naming in downloads
-- [ ] Check download functionality for users with different permissions
-- [ ] Implement unit and integration tests
+### Backend (Django)
+- [x] Add `generated_mock_questions` (JSONField) to `UserProfile` model in `api/models.py`.
+- [x] Run migrations for the new `UserProfile` field.
+- [x] Update `UserProfileSerializer` in `api/serializers.py` to include `generated_mock_questions` (read-only).
+- [x] Modify `GetMockInterviewQuestionsView` in `api/views.py`:
+    - [x] After successfully generating questions, save them to `user_profile.generated_mock_questions`.
+    - [x] Ensure the view returns the generated (and saved) questions.
+- [x] Update `UserProfileView` (`perform_update` method) in `api/views.py`:
+    - [x] If `resume` or `job_description` files are updated or cleared, set `generated_mock_questions` to `None` (or empty list) on the user's profile.
 
-## Phase 9: Homepage UI Redesign (Tabbed Navigation)
+### Frontend (React - MockInterviewPage.tsx)
+- [x] Update `UserProfileData` interface to include `generated_mock_questions`.
+- [x] Introduce `storedQuestions` state for questions from DB and `generatedQuestions` for new ones this session.
+- [x] Modify `fetchProfile` to get and set `storedQuestions`, and display them if no new generation attempt has been made.
+- [x] Update `fetchAndGenerateQuestions` to set `generatedQuestions`.
+- [x] Update file upload/clear handlers to reset generation attempt state and clear question states, then refetch profile.
+- [x] Adjust display logic to show `generatedQuestions` if a generation was attempted this session, otherwise show `storedQuestions`.
+- [x] Ensure "Copy Questions" and other UI elements work with the new state logic.
 
-### Phase 9.1: Core Structure and Tab Navigation
-1.  **Modify Homepage Component (`frontend/src/components/Home.tsx`)**:
-    *   Adapt `Home.tsx` to serve as the main container for the new tabbed layout.
-2.  **Implement Tab Navigation Bar (`TabNavigationBar.tsx`)**:
-    *   Create `TabNavigationBar.tsx` (e.g., in `frontend/src/components/ui/`).
-    *   Render two tabs: "Career Conversations" and "Mock Interviews".
-    *   Utilize `shadcn/ui` tab components (e.g., `Tabs, TabsList, TabsTrigger, TabsContent`) or build with Tailwind CSS.
-    *   Style the navigation bar to be sticky below the `MainHeader.tsx`.
-3.  **Manage Tab State in `Home.tsx`**:
-    *   Use `useState` for the active tab (e.g., `activeTab`).
-    *   Pass state and setter to `TabNavigationBar.tsx` for control and click handling.
-4.  **Conditional Content Rendering in `Home.tsx`**:
-    *   Render content for "Career Conversations" or "Mock Interviews" based on `activeTab`.
+## Phase 10: Mock Interview Recording and Processing
 
-### Phase 9.2: "Career Conversations" Tab Implementation
-1.  **Relocate/Contain Existing Logic**:
-    *   Ensure current conversation display, "Record" FAB, and recording modal logic from `Home.tsx` are rendered only when the "Career Conversations" tab is active.
-    *   Consider refactoring into a `CareerConversationsView.tsx` or use conditional blocks within `Home.tsx`.
-2.  **"No conversations" Message**:
-    *   Verify/implement display of `"No conversations recorded yet."` if the list is empty.
+### I. Backend Model & API Updates:
+- [ ] **Create `Interview` Django Model (`api/models.py`):**
+    - [ ] `user`: ForeignKey to `User` (e.g., `settings.AUTH_USER_MODEL`).
+    - [ ] `name`: CharField(max_length=255, blank=True, default='Untitled Interview').
+    - [ ] `created_at`: DateTimeField(auto_now_add=True).
+    - [ ] `updated_at`: DateTimeField(auto_now=True).
+    - [ ] `questions_used`: JSONField(null=True, blank=True, help_text="List of questions asked during this interview.").
+    - [ ] `audio_file`: FileField(upload_to=interview_audio_path, null=True, blank=True) (Define `interview_audio_path` function for `interviews/<user_id>/<interview_id>/` path).
+    - [ ] `duration`: PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds").
+    - [ ] `status_transcription`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING) (Reuse `STATUS_CHOICES` from `Conversation` or define similarly).
+    - [ ] `transcription_text`: JSONField(null=True, blank=True, help_text="Raw transcription result (JSON)").
+    - [ ] `status_analysis`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING).
+    - [ ] `analysis_results`: JSONField(null=True, blank=True, default=dict, help_text="JSON object for interview analysis").
+    - [ ] `status_coaching`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING).
+    - [ ] `coaching_feedback`: TextField(null=True, blank=True, help_text="Generated coaching feedback for the interview").
+    - [ ] Ensure `STATUS_CHOICES` (Pending, Processing, Completed, Failed) are defined/accessible for status fields.
+    - [ ] Define `__str__` method.
+    - [ ] Define property methods for status displays (e.g., `status_transcription_display`).
+- [ ] **Create `InterviewSerializer` (`api/serializers.py`):**
+    - [ ] Include `InterviewCreateSerializer` if needed.
+    - [ ] Include `audio_file_url`.
+- [ ] **Create API Endpoints for `Interview` (`api/views.py`, `api/urls.py`):**
+    - [ ] `InterviewViewSet` (LIST, CREATE, RETRIEVE, UPDATE, DELETE).
+    - [ ] `perform_create`: Handle audio upload, save `questions_used`, `duration`, trigger background tasks.
+    - [ ] `perform_destroy`: Delete S3 audio file.
+    - [ ] Register with router.
+- [ ] **Background Tasks for `Interview` Processing (`api/tasks.py` or `interview_tasks.py`):**
+    - [ ] `process_interview_transcription_task`: Deepgram transcription.
+    - [ ] `process_interview_analysis_task`: Speech analysis (rate, filler words).
+    - [ ] `process_interview_coaching_task`: Coaching feedback generation.
 
-### Phase 9.3: "Mock Interviews" Tab Implementation - Initial Setup [x]
-1.  [x] **Create `MockInterviewsView.tsx`**:
-    *   New component in `frontend/src/components/` to be rendered for the "Mock Interviews" tab.
-2.  [x] **Display Past Mock Interviews (Placeholder)**:
-    *   Initially, show a placeholder list or a feature introduction message (e.g., `"Start your first mock interview to see it here!"`).
-3.  [x] **"Practice" FAB**:
-    *   Add a FAB with "Practice" icon/label to `MockInterviewsView.tsx`.
-    *   This FAB will control the new mock interview setup modal.
+### II. Frontend: Mock Interview Setup & Interface (`MockInterviewPage.tsx` & related):
+- [ ] **Logic for Using Stored vs. Newly Generated Questions:**
+    - [ ] Use `UserProfile.generated_mock_questions` if no new files uploaded.
+    - [ ] Trigger new generation if new resume/JD uploaded; use these new questions.
+    - [ ] Pass the final list of questions to `MockInterviewInterface.tsx`.
+- [ ] **`MockInterviewInterface.tsx` - Core Recording Flow:**
+    - [ ] State: `currentQuestionIndex`, `isRecording`, `audioBlobs`, `isReadingQuestion`.
+    - [ ] TTS for Questions: Use Deepgram TTS for each question.
+    - [ ] Audio Recording: Use `MediaRecorder` for user's answer.
+    - [ ] UI: Buttons for "Start/Stop Recording Answer", "Next Question", "End Interview".
+    - [ ] Progression: Loop: Read question (TTS) -> Record Answer -> Next.
+    - [ ] On "End Interview": Combine `audioBlobs`, calculate `duration`.
+- [ ] **Submitting Recorded Interview:**
+    - [ ] `FormData`: Append audio file, `questions_used` (JSON string), `duration`.
+    - [ ] POST to `/api/interviews/`.
+    - [ ] Handle loading states, success/error messages.
 
-### Phase 9.4: Mock Interview Setup Modal [x]
-1.  [x] **Create `MockInterviewSetupModal.tsx`**:
-    *   New component in `frontend/src/components/`.
-    *   Use `shadcn/ui` modal components (e.g., `Dialog`) or build one.
-2.  [x] **Modal Content**:
-    *   Sections for "Upload Resume" (`.pdf`, `.docx`) and "Upload Job Description" (`.pdf`, `.docx`, URL paste).
-    *   Include file input fields and a prominent "Start Interview" button.
-3.  [x] **State Management for Modal**:
-    *   Manage open/closed state (in `MockInterviewsView.tsx` or `Home.tsx`).
-    *   Manage form data (resume, JD) within `MockInterviewSetupModal.tsx`.
+### III. Frontend: Displaying Mock Interviews (Home Page or Dedicated Section):
+- [ ] **Fetch and Display `Interview` Data:**
+    - [ ] GET `/api/interviews/` on Home page / "Mock Interviews" section.
+    - [ ] `InterviewCard` component (similar to `ConversationCard`).
+- [ ] **`InterviewDetail` Page:**
+    - [ ] Display questions, audio player, transcription, analysis, coaching feedback.
+    - [ ] Show status of processing steps.
 
-### Phase 9.5: Mock Interview Interface (Placeholder/Future) [x]
-1.  [x] **"Start Interview" Action**:
-    *   On click: Close modal, navigate to a new route (e.g., `/mock-interview/:id`) or display a placeholder interface in the "Mock Interviews" tab. - *Implemented placeholder display in the tab*
-2.  [x] **Basic Interview UI (Initial)**:
-    *   Placeholder elements for question display, "Record Answer" button, and "Next Question" button. - *Created `MockInterviewInterface.tsx` with these placeholders*
-    *   (Actual recording and question fetching will be subsequent, backend-dependent tasks).
-
-### General Considerations for Phase 9
-*   **Component Reusability**: Reuse existing UI components where possible.
-*   **Styling**: Maintain consistency with Tailwind CSS and `shadcn/ui`.
-*   **API Endpoints (Future)**: Note that new backend endpoints will be needed for full mock interview functionality.
-*   **Error Handling & Loading States**: Plan for these as new functionalities are built out.
+### IV. Styling and UX:
+- [ ] **UI/UX for Recording Interface:**
+    - [ ] Clear visual cues for recording states and actions.
+    - [ ] Error handling (mic permissions, TTS, upload).
+- [ ] **UI/UX for Displaying Interviews:**
+    - [ ] Consistent look and feel with conversation list/cards.

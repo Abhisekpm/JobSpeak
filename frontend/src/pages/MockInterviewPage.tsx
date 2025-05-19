@@ -13,13 +13,15 @@ interface UserProfileData {
   username: string;
   resume: string | null;
   job_description: string | null;
+  generated_mock_questions: string[] | null;
 }
 
 const MockInterviewPage: React.FC = () => {
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [generatedQuestions, setGeneratedQuestions] = useState<string[]>([]);
+  const [storedQuestions, setStoredQuestions] = useState<string[] | null>(null);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [questionError, setQuestionError] = useState<string | null>(null);
-  const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
+  const [hasAttemptedGenerationThisSession, setHasAttemptedGenerationThisSession] = useState(false);
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdFile, setJdFile] = useState<File | null>(null);
@@ -36,17 +38,31 @@ const MockInterviewPage: React.FC = () => {
   const jdInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (showLoadingToast = false) => {
     console.log("Fetching user profile for mock interview page...");
+    if(showLoadingToast) {
+      toast({ title: "Loading Profile", description: "Fetching latest profile information..." });
+    }
     setIsProfileLoading(true);
     setProfileError(null);
+
     setCurrentResumeUrl(null);
     setCurrentJdUrl(null);
+    setStoredQuestions(null);
+
     try {
       const response = await apiClient.get<UserProfileData>('/profile/');
       console.log("Profile data fetched:", response.data);
       setCurrentResumeUrl(response.data.resume);
       setCurrentJdUrl(response.data.job_description);
+      setStoredQuestions(response.data.generated_mock_questions || null);
+
+      if (!hasAttemptedGenerationThisSession && response.data.generated_mock_questions) {
+        setGeneratedQuestions(response.data.generated_mock_questions);
+      } else if (!response.data.generated_mock_questions) {
+        if(!hasAttemptedGenerationThisSession) setGeneratedQuestions([]);
+      }
+
     } catch (err: any) {
       console.error("Error fetching profile:", err);
       let errorMsg = "Failed to load profile data.";
@@ -57,33 +73,42 @@ const MockInterviewPage: React.FC = () => {
       toast({ title: "Error Loading Profile", description: errorMsg, variant: "destructive" });
       setCurrentResumeUrl(null);
       setCurrentJdUrl(null);
+      setStoredQuestions(null);
+      setGeneratedQuestions([]);
     } finally {
       setIsProfileLoading(false);
     }
-  }, []);
+  }, [hasAttemptedGenerationThisSession]);
 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
 
-  const fetchQuestions = useCallback(async () => {
+  const fetchAndGenerateQuestions = useCallback(async () => {
     if (!currentResumeUrl || !currentJdUrl) {
         console.log("Cannot fetch questions: Missing resume or JD URL.");
         setQuestionError("Missing resume or job description. Please upload both files above.");
-        setQuestions([]);
+        setGeneratedQuestions([]);
         setIsLoadingQuestions(false);
-        setHasAttemptedGeneration(true);
+        setHasAttemptedGenerationThisSession(true);
         return;
     }
 
     console.log("Fetching mock interview questions via button...");
     setIsLoadingQuestions(true);
     setQuestionError(null);
-    setHasAttemptedGeneration(true);
+    setHasAttemptedGenerationThisSession(true);
+    setStoredQuestions(null);
     try {
       const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
       console.log("Questions Response received:", response.data);
-      setQuestions(response.data.questions || []);
+      const fetchedQuestions = response.data.questions || [];
+      setGeneratedQuestions(fetchedQuestions);
+      if (fetchedQuestions.length > 0) {
+         // Optionally, you could re-fetch profile here to get the saved questions into storedQuestions state
+         // but since the backend saves them and returns them, generatedQuestions is up-to-date.
+         // await fetchProfile(); 
+      }
     } catch (err: any) {
       console.error("Error fetching mock interview questions:", err);
       const errorData = err.response?.data?.error;
@@ -101,7 +126,7 @@ const MockInterviewPage: React.FC = () => {
       }
 
       setQuestionError(errorMsg);
-      setQuestions([]);
+      setGeneratedQuestions([]);
     } finally {
       setIsLoadingQuestions(false);
     }
@@ -113,8 +138,9 @@ const MockInterviewPage: React.FC = () => {
 
     setIsUploading(true);
     setQuestionError(null);
-    setHasAttemptedGeneration(false);
-    setQuestions([]);
+    setHasAttemptedGenerationThisSession(false);
+    setGeneratedQuestions([]);
+    setStoredQuestions(null);
     console.log(`Attempting to upload ${fileType}:`, file.name);
     const formData = new FormData();
     formData.append(fieldName, file);
@@ -126,7 +152,7 @@ const MockInterviewPage: React.FC = () => {
       console.log(`${fileType} uploaded successfully.`);
       toast({ title: `${fileType === 'resume' ? 'Resume' : 'Job Description'} Updated`, description: "File uploaded successfully." });
       if (fileType === 'resume') setResumeFile(null); else setJdFile(null);
-      await fetchProfile();
+      await fetchProfile(true);
 
     } catch (error: any) {
       console.error(`Failed to upload ${fileType}:`, error);
@@ -167,14 +193,15 @@ const MockInterviewPage: React.FC = () => {
 
     setIsClearing(true);
     setQuestionError(null);
-    setHasAttemptedGeneration(false);
-    setQuestions([]);
+    setHasAttemptedGenerationThisSession(false);
+    setGeneratedQuestions([]);
+    setStoredQuestions(null);
     console.log(`Attempting to clear ${fileType}...`);
     try {
       await apiClient.patch<UserProfileData>('/profile/', { [fieldName]: null });
       console.log(`${friendlyName} cleared successfully.`);
       toast({ title: `${friendlyName} Removed`, description: `File removed successfully.` });
-      await fetchProfile();
+      await fetchProfile(true);
 
     } catch (error: any) {
       console.error(`Failed to clear ${fileType}:`, error);
@@ -199,24 +226,25 @@ const MockInterviewPage: React.FC = () => {
   };
 
   const handleGenerateClick = () => {
-      fetchQuestions();
+      fetchAndGenerateQuestions();
   };
 
   const handleCopyQuestions = async () => {
-    if (questions.length === 0) {
+    const questionsToCopy = generatedQuestions.length > 0 ? generatedQuestions : storedQuestions;
+    if (!questionsToCopy || questionsToCopy.length === 0) {
       toast({
         title: "No Questions to Copy",
-        description: "Please generate questions first.",
+        description: "Please generate or load questions first.",
         variant: "destructive",
       });
       return;
     }
-    const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    const questionsText = questionsToCopy.map((q, i) => `${i + 1}. ${q}`).join('\n');
     try {
       await navigator.clipboard.writeText(questionsText);
       toast({
         title: "Questions Copied!",
-        description: "The generated questions have been copied to your clipboard.",
+        description: "The questions have been copied to your clipboard.",
       });
     } catch (err) {
       console.error("Failed to copy questions: ", err);
@@ -229,6 +257,10 @@ const MockInterviewPage: React.FC = () => {
   };
 
   const isGenerateDisabled = isLoadingQuestions || isProfileLoading || !currentResumeUrl || !currentJdUrl;
+
+  const displayQuestions = hasAttemptedGenerationThisSession ? generatedQuestions : (storedQuestions || []);
+
+  const showAttemptedGenerationMessage = hasAttemptedGenerationThisSession || (storedQuestions && storedQuestions.length > 0);
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6 relative">
@@ -322,10 +354,10 @@ const MockInterviewPage: React.FC = () => {
         )}
 
       <div className="mt-6">
-          {hasAttemptedGeneration && (
+          {showAttemptedGenerationMessage && (
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold tracking-tight">Generated Questions</h2>
-              {questions.length > 0 && !isLoadingQuestions && !questionError && (
+              {displayQuestions.length > 0 && !isLoadingQuestions && !questionError && (
                 <Button onClick={handleCopyQuestions} variant="outline" size="sm">
                   <Copy className="mr-2 h-4 w-4" />
                   Copy
@@ -341,7 +373,7 @@ const MockInterviewPage: React.FC = () => {
             </div>
           )}
 
-          {hasAttemptedGeneration && questionError && !isLoadingQuestions && (
+          {showAttemptedGenerationMessage && questionError && !isLoadingQuestions && (
             <Alert variant="destructive" className="mb-6">
               <Terminal className="h-4 w-4" />
               <AlertTitle>Could Not Generate Questions</AlertTitle>
@@ -351,11 +383,11 @@ const MockInterviewPage: React.FC = () => {
             </Alert>
           )}
 
-          {hasAttemptedGeneration && !isLoadingQuestions && !questionError && questions.length > 0 && (
+          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && displayQuestions.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Here are some questions based on your uploaded resume and job description. Have a friend conduct the mock interview and record your response for getting coaching feedback.</p>
               <ul className="list-decimal list-inside space-y-3 pl-4">
-                {questions.map((question, index) => (
+                {displayQuestions.map((question, index) => (
                   <li key={index} className="text-lg">
                     {question}
                   </li>
@@ -364,11 +396,11 @@ const MockInterviewPage: React.FC = () => {
             </div>
           )}
 
-          {hasAttemptedGeneration && !isLoadingQuestions && !questionError && questions.length === 0 && (
-             <p className="text-muted-foreground text-center py-6">No questions generated. Please check your uploaded files or try again.</p>
+          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && displayQuestions.length === 0 && (
+             <p className="text-muted-foreground text-center py-6">No questions available. Please check your uploaded files or try generating new questions.</p>
           )}
 
-           {!hasAttemptedGeneration && !isProfileLoading && (
+           {!showAttemptedGenerationMessage && !isProfileLoading && !isLoadingQuestions && (
              <p className="text-muted-foreground text-center py-6">Upload a resume and a target job description, then click the button above to generate questions.</p>
            )}
       </div>
