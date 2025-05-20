@@ -4,12 +4,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
-from .models import Conversation, UserProfile
-from .serializers import ConversationSerializer, UserSerializer, ConversationCreateSerializer, UserProfileSerializer
+from .models import Conversation, UserProfile, Interview
+from .serializers import ConversationSerializer, UserSerializer, ConversationCreateSerializer, UserProfileSerializer, InterviewSerializer, InterviewCreateSerializer
 from .permissions import IsOwner
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
-from .tasks import process_transcription_task
+from .tasks import process_transcription_task, process_interview_transcription_task
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
 from google.oauth2 import id_token
@@ -484,3 +484,94 @@ class GetMockInterviewQuestionsView(APIView):
             return Response({"error": "Failed to generate questions due to an internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --- End Mock Interview Question View ---
+
+# --- Interview ViewSet ---
+class InterviewViewSet(viewsets.ModelViewSet):
+    queryset = Interview.objects.none() # Default queryset
+    serializer_class = InterviewSerializer
+    parser_classes = (MultiPartParser, FormParser, JSONParser) # For file uploads
+    permission_classes = [permissions.IsAuthenticated, IsOwner] # IsOwner will check interview.user
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            return Interview.objects.filter(user=user).order_by('-created_at')
+        return Interview.objects.none()
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return InterviewCreateSerializer
+        return InterviewSerializer
+
+    def perform_create(self, serializer):
+        """Save the interview instance, handle S3 audio upload, and trigger transcription task."""
+        audio_file_data = serializer.validated_data.pop('audio_file', None)
+        # Ensure 'questions_used' is handled correctly by the serializer directly or here.
+        # For now, assuming InterviewCreateSerializer handles it.
+        user = self.request.user
+
+        instance = serializer.save(user=user)
+        print(f"Saved initial Interview with ID: {instance.id} for user: {user.username}")
+
+        if audio_file_data:
+            print(f"Attempting to save interview audio file explicitly using S3Boto3Storage instance...")
+            try:
+                s3_storage = S3Boto3Storage()
+                file_name = instance.audio_file.field.generate_filename(instance, audio_file_data.name)
+                actual_name_saved = s3_storage.save(file_name, audio_file_data)
+                
+                if actual_name_saved:
+                    print(f"Successfully saved interview audio file to S3 with key: {actual_name_saved}")
+                    instance.audio_file.name = actual_name_saved
+                    instance.save(update_fields=['audio_file'])
+                    print(f"Updated interview instance {instance.id} audio_file field in DB.")
+                else:
+                    raise ValueError("S3 save failed to return name for interview audio.")
+
+            except Exception as e:
+                print(f"ERROR explicitly saving interview audio file to S3 for instance {instance.id}: {e}")
+                instance.delete() # Clean up the interview instance if S3 upload failed
+                raise
+        
+        # Trigger background task for transcription
+        if instance.audio_file and instance.audio_file.name:
+            print(f"Scheduling background transcription task for Interview ID: {instance.id}")
+            # Ensure all necessary fields are set before scheduling
+            # For example, if the task expects questions_used to be non-null, verify here
+            # or ensure the model has a default.
+            instance.status_transcription = Interview.STATUS_PENDING
+            instance.status_analysis = Interview.STATUS_PENDING
+            instance.status_coaching = Interview.STATUS_PENDING
+            instance.save(update_fields=['status_transcription', 'status_analysis', 'status_coaching', 'updated_at'])
+            
+            process_interview_transcription_task(instance.id, schedule=1) # Schedule with a 1-second delay
+            print(f"Successfully scheduled transcription task for Interview ID: {instance.id}")
+        elif not audio_file_data:
+            # No audio file uploaded, so transcription cannot proceed.
+            print(f"No audio file uploaded for Interview ID: {instance.id}. Transcription not triggered.")
+            instance.status_transcription = Interview.STATUS_FAILED
+            instance.status_analysis = Interview.STATUS_FAILED # No analysis if no transcript
+            instance.status_coaching = Interview.STATUS_FAILED # No coaching if no transcript
+            instance.save(update_fields=['status_transcription', 'status_analysis', 'status_coaching', 'updated_at'])
+        
+        # serializer.instance is already set by serializer.save()
+        # No need to call super().perform_create(serializer) as we've handled the save.
+
+    def perform_destroy(self, instance):
+        """Delete the interview instance and its associated audio file from S3."""
+        audio_file_name = None
+        if instance.audio_file and instance.audio_file.name:
+            audio_file_name = instance.audio_file.name
+
+        super().perform_destroy(instance) # Delete DB record
+
+        if audio_file_name:
+            print(f"Attempting to delete interview audio file from S3: {audio_file_name}")
+            try:
+                s3_storage = S3Boto3Storage()
+                s3_storage.delete(audio_file_name)
+                print(f"Successfully deleted interview audio file from S3: {audio_file_name}")
+            except Exception as s3_exc:
+                print(f"ERROR deleting interview audio file from S3 {audio_file_name}: {s3_exc}")
+
+# --- End Interview ViewSet ---

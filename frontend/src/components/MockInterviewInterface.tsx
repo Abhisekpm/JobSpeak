@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button'; // Using shadcn Button for consistency
 import { Play, Pause, Mic } from 'lucide-react'; // Icons for controls
+import { toast } from './ui/use-toast';
 
 interface MockInterviewInterfaceProps {
   onEndInterview: () => void;
-  // We can add props for question data, etc. later
+  questions: string[]; // Added to accept the full list of questions
   initialQuestion?: string; // Renamed for clarity
   // questionNumber?: number;
   // totalQuestions?: number;
@@ -13,12 +14,14 @@ interface MockInterviewInterfaceProps {
 
 const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   onEndInterview,
-  initialQuestion = "[Placeholder: Tell me about yourself.]",
+  questions, // Destructure the new prop
+  initialQuestion, // Keep initialQuestion for now, can be derived from questions[0] later
   // questionNumber = 1,
   // totalQuestions = 5,
   onNextQuestion,
 }) => {
-  const [currentQuestion, setCurrentQuestion] = useState<string>(initialQuestion);
+  const [currentQuestion, setCurrentQuestion] = useState<string>(initialQuestion || (questions && questions.length > 0 ? questions[0] : "[Placeholder: No questions provided.]"));
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0); // Manage current question index
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   // const [questionNumber, setQuestionNumber] = useState<number>(1); // If you want to track q number
@@ -82,21 +85,28 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   const handleNextQuestion = async () => {
     console.log("Next Question clicked");
     if (onNextQuestion) {
-      const nextQ = await onNextQuestion();
+      const nextQ = await onNextQuestion(); // This prop might be removed if question management is internal
       if (nextQ) {
         setCurrentQuestion(nextQ);
-        // setQuestionNumber(prev => prev + 1);
         speakText(nextQ);
       } else {
-        // Handle no more questions scenario if needed
-        console.log("No more questions or error fetching question.");
+        console.log("No more questions from onNextQuestion prop or error fetching question.");
+        // Potentially end interview if onNextQuestion returns null (signifying no more questions)
+        // handleEndInterviewAndRecording(); 
       }
     } else {
-      // Placeholder if onNextQuestion is not provided
-      const newPlaceholderQuestion = "[Placeholder: Next question...]";
-      setCurrentQuestion(newPlaceholderQuestion);
-      // setQuestionNumber(prev => prev + 1);
-      speakText(newPlaceholderQuestion);
+      // Internal question progression logic
+      const nextIndex = currentQuestionIndex + 1;
+      if (questions && nextIndex < questions.length) {
+        setCurrentQuestionIndex(nextIndex);
+        setCurrentQuestion(questions[nextIndex]);
+        speakText(questions[nextIndex]);
+      } else {
+        console.log("No more questions in the list.");
+        // Optionally, disable "Next Question" button or auto-end interview
+        toast({ title: "End of Questions", description: "You have answered all available questions.", duration: 3000 });
+        // Consider automatically calling handleEndInterviewAndRecording() here or disabling next.
+      }
     }
   };
 
@@ -143,7 +153,12 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
             {isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
           </Button>
         )}
-        <Button onClick={handleNextQuestion} variant="outline" size="lg" disabled={!onNextQuestion && !isRecording}>
+        <Button 
+          onClick={handleNextQuestion} 
+          variant="outline" 
+          size="lg" 
+          disabled={!isRecording || (questions && currentQuestionIndex >= questions.length - 1 && !onNextQuestion)}
+        >
           Next Question
         </Button>
       </div>

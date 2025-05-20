@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Conversation, UserProfile  # Remove Message import
+from .models import Conversation, UserProfile, Interview  # Remove Message import
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage # Ensure imported
 
@@ -220,3 +220,97 @@ class UserProfileSerializer(serializers.ModelSerializer):
              instance.save(update_fields=updated_fields)
 
         return instance
+
+# --- Interview Serializers ---
+class InterviewSerializer(serializers.ModelSerializer):
+    audio_file_url = serializers.SerializerMethodField()
+    status_transcription_display = serializers.CharField(source='get_status_transcription_display', read_only=True)
+    status_analysis_display = serializers.CharField(source='get_status_analysis_display', read_only=True)
+    status_coaching_display = serializers.CharField(source='get_status_coaching_display', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = Interview
+        fields = [
+            'id',
+            'user',
+            'username',
+            'name',
+            'created_at',
+            'updated_at',
+            'questions_used',
+            'audio_file',
+            'audio_file_url',
+            'duration',
+            'status_transcription',
+            'status_transcription_display',
+            'transcription_text',
+            'status_analysis',
+            'status_analysis_display',
+            'analysis_results',
+            'status_coaching',
+            'status_coaching_display',
+            'coaching_feedback',
+        ]
+        read_only_fields = [
+            'id',
+            'user',
+            'username',
+            'created_at',
+            'updated_at',
+            'audio_file_url',
+            'status_transcription',
+            'status_transcription_display',
+            'transcription_text',
+            'status_analysis',
+            'status_analysis_display',
+            'analysis_results',
+            'status_coaching',
+            'status_coaching_display',
+            'coaching_feedback',
+        ]
+
+    def get_audio_file_url(self, obj):
+        if obj.audio_file and hasattr(obj.audio_file, 'url'):
+            try:
+                return obj.audio_file.url
+            except Exception as e:
+                print(f"ERROR generating S3 URL for Interview {obj.id} audio file {obj.audio_file.name}: {e}")
+                return None
+        return None
+
+class InterviewCreateSerializer(serializers.ModelSerializer):
+    audio_file = serializers.FileField(write_only=True, required=True)
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    duration = serializers.FloatField(required=True, write_only=True)
+    questions_used = serializers.JSONField(required=True, write_only=True) # Expecting a list of strings
+
+    class Meta:
+        model = Interview
+        fields = ['id', 'name', 'audio_file', 'duration', 'questions_used']
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        name = validated_data.pop('name', None)
+        duration = validated_data.pop('duration')
+        questions_used = validated_data.pop('questions_used')
+        # The rest of validated_data should be audio_file, handled by super or ModelViewSet implicitly if user is set in view
+
+        if not name:
+            # Create a default name if none provided, e.g., based on user and timestamp or count
+            # For simplicity, let's use a generic default for now.
+            # user = self.context['request'].user # Assuming request context is passed to serializer
+            # timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+            # name = f"Mock Interview - {user.username} - {timestamp}"
+            # For now, a simpler default, can be refined in the view if request context isn't standard here.
+            existing_count = Interview.objects.filter(user=self.context['request'].user).count()
+            name = f"Mock Interview {existing_count + 1}"
+
+        interview = Interview.objects.create(
+            user=self.context['request'].user, # User must be set, typically from request in the view
+            name=name,
+            duration=duration,
+            questions_used=questions_used,
+            **validated_data # This will pass audio_file if it's still in validated_data
+        )
+        return interview

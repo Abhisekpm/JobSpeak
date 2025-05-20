@@ -187,3 +187,78 @@ class UserProfile(models.Model):
         return f"Profile for {self.user.username}"
 
 # Check the existing models
+
+# Define a dynamic path for uploaded interview audio files
+def interview_audio_path(instance, filename):
+    # File will be uploaded to MEDIA_ROOT/interviews/<user_id>/<interview_id>/<filename>
+    user_id_folder = instance.user.id if instance.user else 'anonymous'
+    # Sanitize filename (optional, but good practice if filename comes from user input directly for the object name)
+    # For now, assuming filename is reasonable or handled by S3 storage if special chars exist.
+    return f'interviews/{user_id_folder}/{instance.id}/{filename}'
+
+
+class Interview(models.Model):
+    # --- Status Definitions (can reuse from Conversation or define specifically if they diverge) ---
+    STATUS_PENDING = Conversation.STATUS_PENDING
+    STATUS_PROCESSING = Conversation.STATUS_PROCESSING
+    STATUS_COMPLETED = Conversation.STATUS_COMPLETED
+    STATUS_FAILED = Conversation.STATUS_FAILED
+    
+    STATUS_CHOICES = Conversation.STATUS_CHOICES
+
+    # --- Core Fields ---
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='interviews',
+        null=False,
+        blank=False
+    )
+    name = models.CharField(max_length=255, blank=True, default='Untitled Interview')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    questions_used = models.JSONField(null=True, blank=True, help_text="List of questions asked during this interview.")
+    audio_file = models.FileField(upload_to=interview_audio_path, null=True, blank=True)
+    duration = models.PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds")
+
+    # --- Transcription Fields ---
+    status_transcription = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    transcription_text = models.JSONField(null=True, blank=True, help_text="Raw transcription result (JSON)")
+
+    # --- Analysis Fields ---
+    status_analysis = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    analysis_results = models.JSONField(null=True, blank=True, default=dict, help_text="JSON object for interview analysis")
+
+    # --- Coaching Fields ---
+    status_coaching = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    coaching_feedback = models.TextField(null=True, blank=True, help_text="Generated coaching feedback for the interview")
+
+    # --- String Representation ---
+    def __str__(self):
+        user_info = self.user.username if self.user else 'No User'
+        return f"Interview {self.id} by {user_info} - {self.name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+    # --- Status Display Properties ---
+    @property
+    def status_transcription_display(self):
+        return self.get_status_transcription_display()
+
+    @property
+    def status_analysis_display(self):
+        return self.get_status_analysis_display()
+    
+    @property
+    def status_coaching_display(self):
+        return self.get_status_coaching_display()

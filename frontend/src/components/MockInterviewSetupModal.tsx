@@ -10,9 +10,20 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { X } from "lucide-react";
+import { X, Upload, Loader2 } from "lucide-react";
+import apiClient from "../lib/apiClient";
+import MockInterviewInterface from "./MockInterviewInterface";
+import { toast } from "./ui/use-toast";
 
-// Helper to get filename from URL (similar to SettingsPage)
+// Define UserProfileData interface for fetching profile
+interface UserProfileData {
+  username: string;
+  resume: string | null;
+  job_description: string | null;
+  generated_mock_questions: string[] | null;
+}
+
+// Helper to get filename from URL (re-added)
 const getFilenameFromUrl = (url: string | null): string => {
   if (!url) return "";
   try {
@@ -20,6 +31,7 @@ const getFilenameFromUrl = (url: string | null): string => {
     const pathParts = urlParts.pathname.split('/');
     return decodeURIComponent(pathParts[pathParts.length - 1] || "");
   } catch (e) {
+    // Fallback for non-URL strings or if URL parsing fails (e.g. relative paths if ever passed)
     const pathParts = url.split('/');
     return pathParts[pathParts.length - 1] || "";
   }
@@ -51,6 +63,12 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
   // Display names for initial files
   const [initialResumeFilename, setInitialResumeFilename] = useState("");
   const [initialJdFilename, setInitialJdFilename] = useState("");
+
+  // New state variables
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [generatedQuestionsList, setGeneratedQuestionsList] = useState<string[]>([]);
+  const [isInterviewActive, setIsInterviewActive] = useState(false); // Changed from isInterviewStarting for clarity
 
   useEffect(() => {
     if (initialResumeUrl) {
@@ -136,32 +154,147 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
     }
   };
 
-  const handleSubmit = () => {
+  const handleActualStartInterview = async () => {
+    setErrorMessage(null);
+    setGeneratedQuestionsList([]);
+
     const finalUseExistingResume = useExistingResume && !resumeFile;
     const finalUseExistingJd = useExistingJd && !jdFile && !jdUrl.trim();
 
     if (!finalUseExistingResume && !resumeFile) {
-      alert("Please upload or select a resume.");
+      setErrorMessage("Please provide a resume.");
       return;
     }
-    if (!finalUseExistingJd && !jdFile && !jdUrl.trim()) {
-      alert("Please upload or select a job description file or provide a URL.");
+    if (!jdUrl.trim() && (!finalUseExistingJd && !jdFile)) {
+        setErrorMessage("Please upload a JD file or ensure an existing one is used (if not providing a URL).");
+        return;
+    }
+    if (jdUrl.trim() && (jdFile || finalUseExistingJd)) {
+      setErrorMessage("Please choose either a JD file OR a JD URL/existing file, not both input methods for JD.");
       return;
     }
-    onStartInterview(resumeFile, jdFile, jdUrl.trim(), finalUseExistingResume, finalUseExistingJd);
-  };
 
+    setIsLoading(true);
+    let filesWereModifiedInModal = false;
+    let questionsToUse: string[] | null = null;
+
+    try {
+      // Step 1: Upload Resume if a new one is selected in modal
+      if (resumeFile) { // A new file was selected by the user in the modal
+        const resumeFormData = new FormData();
+        resumeFormData.append('resume', resumeFile);
+        console.log("Uploading new resume from modal...");
+        await apiClient.patch<UserProfileData>('/profile/', resumeFormData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        filesWereModifiedInModal = true;
+        toast({ title: "Resume Updated", description: "Your new resume has been saved to your profile." });
+      }
+
+      // Step 2: Upload JD File if a new one is selected in modal (and no JD URL is primary for this action)
+      if (jdFile && !jdUrl.trim()) { // A new file was selected, and no URL typed
+        const jdFormData = new FormData();
+        jdFormData.append('job_description', jdFile);
+        console.log("Uploading new JD file from modal...");
+        await apiClient.patch<UserProfileData>('/profile/', jdFormData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        filesWereModifiedInModal = true;
+        toast({ title: "Job Description Updated", description: "Your new JD file has been saved to your profile." });
+      }
+      
+      // Step 3: Decide question source
+      // If a JD URL is provided, filesWereModifiedInModal might still be false if only resume was existing.
+      // The critical part is that the backend will clear generated_mock_questions if resume/JD files are changed via PATCH /profile/.
+      // So, if filesWereModifiedInModal is true, a new generation is necessary.
+      // If jdUrl is provided, we assume it describes the job, and the UserProfile.job_description should align (user's responsibility for now).
+      // The generation will use whatever is on profile.
+
+      if (filesWereModifiedInModal || jdUrl.trim()) {
+        // If files were changed, or a JD URL is specified (implying user wants questions for *this specific JD URL context*,
+        // even if file on profile is different, relying on backend to use profile files)
+        // OR if there's simply no other way to get questions (e.g. no initial files)
+        console.log("Files were modified in modal or JD URL provided. Fetching new questions based on current profile state...");
+        const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+        questionsToUse = response.data.questions;
+      } else {
+        // Files were NOT modified in the modal, and no new JD URL was specified.
+        // Check profile for existing questions that should correspond to initialResumeUrl and initialJdUrl.
+        console.log("Files not modified in modal, no JD URL. Checking profile for stored questions...");
+        try {
+          const profileResponse = await apiClient.get<UserProfileData>('/profile/');
+          if (profileResponse.data.generated_mock_questions && profileResponse.data.generated_mock_questions.length > 0) {
+            console.log("Using stored questions from profile:", profileResponse.data.generated_mock_questions);
+            questionsToUse = profileResponse.data.generated_mock_questions;
+          } else {
+            console.log("No stored questions found on profile, or they are empty. Will fetch new ones based on current profile state.");
+            const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+            questionsToUse = response.data.questions;
+          }
+        } catch (profileError) {
+          console.error("Error fetching profile to check for stored questions:", profileError);
+          setErrorMessage("Could not check for existing questions. Attempting to generate new questions based on current profile state.");
+          // Fallback to generating new questions
+          const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+          questionsToUse = response.data.questions;
+        }
+      }
+
+      if (questionsToUse && questionsToUse.length > 0) {
+        setGeneratedQuestionsList(questionsToUse);
+        setIsInterviewActive(true);
+        setErrorMessage(null);
+      } else {
+        setErrorMessage("Failed to obtain questions. Please ensure your resume and job description are correctly uploaded and try again.");
+        toast({ title: "No Questions Available", description: "Could not load or generate mock interview questions.", variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error("Error starting interview from modal:", error);
+      const apiError = error.response?.data?.error || "An error occurred while processing your request.";
+      setErrorMessage(`Failed to start interview: ${apiError}`);
+      toast({ title: "Error Starting Interview", description: apiError, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleModalClose = () => {
+    // Reset state when modal is fully closed or interview ends
+    setResumeFile(null);
+    setJdFile(null);
+    setJdUrl("");
+    if (initialResumeUrl) setUseExistingResume(true); else setUseExistingResume(false);
+    if (initialJdUrl) setUseExistingJd(true); else setUseExistingJd(false);
+    setInitialResumeFilename(getFilenameFromUrl(initialResumeUrl));
+    setInitialJdFilename(getFilenameFromUrl(initialJdUrl));
+    
+    setIsLoading(false);
+    setErrorMessage(null);
+    setGeneratedQuestionsList([]);
+    setIsInterviewActive(false); 
+    onClose(); // Call the original onClose prop
+  }
+
+  if (isInterviewActive) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleModalClose()}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl h-[calc(100vh-2rem)] max-h-[90vh] p-0 flex flex-col overflow-hidden">
+          {/* Optional: Add a header here if needed, or MockInterviewInterface can have its own close button */}
+          <MockInterviewInterface
+            questions={generatedQuestionsList}
+            onEndInterview={() => {
+              // When interview ends from within the interface, reset and close modal
+              handleModalClose();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Original modal form for setup
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
-        // Reset state on close if desired, or parent can manage this by changing key
-        setResumeFile(null);
-        setJdFile(null);
-        setJdUrl("");
-        if (initialResumeUrl) setUseExistingResume(true); else setUseExistingResume(false);
-        if (initialJdUrl) setUseExistingJd(true); else setUseExistingJd(false);
+        handleModalClose(); // Ensure full reset if closed via overlay click or X button
       }
-      onClose();
+      // Don't call onClose directly here, handleModalClose will do it
     }}>
       <DialogContent className="w-[calc(100vw-32px)] max-w-full p-4 sm:max-w-md md:max-w-lg lg:max-w-[500px] mx-auto sm:p-6">
         <DialogHeader>
@@ -204,7 +337,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                Job Description
+                Job Description (File or URL)
               </span>
             </div>
           </div>
@@ -249,9 +382,17 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             disabled={!!jdFile || (useExistingJd && !!initialJdFilename)}
           />
         </div>
+        {errorMessage && (
+          <p className="text-sm text-red-500 text-center mt-2 mb-2 px-2 break-words">{errorMessage}</p>
+        )}
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t sm:border-t-0 mt-2 sm:mt-0">
-          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
-          <Button type="submit" onClick={handleSubmit} className="w-full sm:w-auto">Start Interview</Button>
+          <Button type="button" variant="outline" onClick={handleModalClose} className="w-full sm:w-auto" disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleActualStartInterview} className="w-full sm:w-auto" disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {isLoading ? "Processing..." : "Start Interview"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

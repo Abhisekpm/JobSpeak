@@ -248,61 +248,27 @@
   - [x] Add feedback during download (loading spinner/progress)
   - [x] Display appropriate error messages if download fails
 
-## Phase 9: Mock Interview Question Generation & Persistence
-
-### Backend (Django)
-- [x] Add `generated_mock_questions` (JSONField) to `UserProfile` model in `api/models.py`.
-- [x] Run migrations for the new `UserProfile` field.
-- [x] Update `UserProfileSerializer` in `api/serializers.py` to include `generated_mock_questions` (read-only).
-- [x] Modify `GetMockInterviewQuestionsView` in `api/views.py`:
-    - [x] After successfully generating questions, save them to `user_profile.generated_mock_questions`.
-    - [x] Ensure the view returns the generated (and saved) questions.
-- [x] Update `UserProfileView` (`perform_update` method) in `api/views.py`:
-    - [x] If `resume` or `job_description` files are updated or cleared, set `generated_mock_questions` to `None` (or empty list) on the user's profile.
-
-### Frontend (React - MockInterviewPage.tsx)
-- [x] Update `UserProfileData` interface to include `generated_mock_questions`.
-- [x] Introduce `storedQuestions` state for questions from DB and `generatedQuestions` for new ones this session.
-- [x] Modify `fetchProfile` to get and set `storedQuestions`, and display them if no new generation attempt has been made.
-- [x] Update `fetchAndGenerateQuestions` to set `generatedQuestions`.
-- [x] Update file upload/clear handlers to reset generation attempt state and clear question states, then refetch profile.
-- [x] Adjust display logic to show `generatedQuestions` if a generation was attempted this session, otherwise show `storedQuestions`.
-- [x] Ensure "Copy Questions" and other UI elements work with the new state logic.
+## Phase 9: Mock Interview - Question Persistence (Initial Setup)
+- [x] **Backend Model Change (UserProfile):** Add `generated_mock_questions` (JSONField) to `UserProfile` model in `backend/api/models.py`.
+- [x] **Backend Migrations:** Run migrations for `UserProfile` change.
+- [x] **Backend Serializer Change (UserProfileSerializer):** Update `UserProfileSerializer` in `backend/api/serializers.py` to include `generated_mock_questions` (read-only).
+- [x] **Backend View Changes (GetMockInterviewQuestionsView):** Modify `GetMockInterviewQuestionsView` (`backend/api/views.py`) to save generated questions to `UserProfile.generated_mock_questions`.
+- [x] **Backend View Changes (UserProfileView):** Modify `UserProfileView` (`backend/api/views.py`) `perform_update` to clear `generated_mock_questions` if resume/JD files change.
+- [x] **Frontend Changes (MockInterviewPage.tsx):** Update `UserProfileData` interface, state management, `fetchProfile`, `fetchAndGenerateQuestions`, file upload/clear handlers, and display logic.
+- [x] **Debugging & Resolution:** Add logging, identify and fix frontend refresh error (empty script tag in `index.html`), revert unrelated debugging changes.
 
 ## Phase 10: Mock Interview Recording and Processing
 
-### I. Backend Model & API Updates:
-- [ ] **Create `Interview` Django Model (`api/models.py`):**
-    - [ ] `user`: ForeignKey to `User` (e.g., `settings.AUTH_USER_MODEL`).
-    - [ ] `name`: CharField(max_length=255, blank=True, default='Untitled Interview').
-    - [ ] `created_at`: DateTimeField(auto_now_add=True).
-    - [ ] `updated_at`: DateTimeField(auto_now=True).
-    - [ ] `questions_used`: JSONField(null=True, blank=True, help_text="List of questions asked during this interview.").
-    - [ ] `audio_file`: FileField(upload_to=interview_audio_path, null=True, blank=True) (Define `interview_audio_path` function for `interviews/<user_id>/<interview_id>/` path).
-    - [ ] `duration`: PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds").
-    - [ ] `status_transcription`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING) (Reuse `STATUS_CHOICES` from `Conversation` or define similarly).
-    - [ ] `transcription_text`: JSONField(null=True, blank=True, help_text="Raw transcription result (JSON)").
-    - [ ] `status_analysis`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING).
-    - [ ] `analysis_results`: JSONField(null=True, blank=True, default=dict, help_text="JSON object for interview analysis").
-    - [ ] `status_coaching`: CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING).
-    - [ ] `coaching_feedback`: TextField(null=True, blank=True, help_text="Generated coaching feedback for the interview").
-    - [ ] Ensure `STATUS_CHOICES` (Pending, Processing, Completed, Failed) are defined/accessible for status fields.
-    - [ ] Define `__str__` method.
-    - [ ] Define property methods for status displays (e.g., `status_transcription_display`).
-- [ ] **Create `InterviewSerializer` (`api/serializers.py`):**
-    - [ ] Include `InterviewCreateSerializer` if needed.
-    - [ ] Include `audio_file_url`.
-- [ ] **Create API Endpoints for `Interview` (`api/views.py`, `api/urls.py`):**
-    - [ ] `InterviewViewSet` (LIST, CREATE, RETRIEVE, UPDATE, DELETE).
-    - [ ] `perform_create`: Handle audio upload, save `questions_used`, `duration`, trigger background tasks.
-    - [ ] `perform_destroy`: Delete S3 audio file.
-    - [ ] Register with router.
-- [ ] **Background Tasks for `Interview` Processing (`api/tasks.py` or `interview_tasks.py`):**
-    - [ ] `process_interview_transcription_task`: Deepgram transcription.
-    - [ ] `process_interview_analysis_task`: Speech analysis (rate, filler words).
-    - [ ] `process_interview_coaching_task`: Coaching feedback generation.
+### I. Backend Setup for Interview Model
+- [x] **Step 10.I.1:** Create `Interview` Django Model (in `backend/api/models.py`) and run migrations.
+- [x] **Step 10.I.2:** Create `InterviewSerializer` and `InterviewCreateSerializer` (in `backend/api/serializers.py`).
+- [x] **Step 10.I.3:** Create API Endpoints for `Interview` (`InterviewViewSet` in `backend/api/views.py` and URL registration in `backend/api/urls.py`).
+- [x] **Step 10.I.4:** Create Background Tasks for Interview Processing (`process_interview_transcription_task`, `process_interview_analysis_task`, `process_interview_coaching_task` in `backend/api/tasks.py`).
+- [ ] **Step 10.I.5:** Refactor service functions (`analyze_conversation` in `services/analysis.py` and `generate_coaching_feedback` in `services/coaching.py`) to be generic or handle `Interview` objects.
+- [ ] **Step 10.I.6:** Update `InterviewViewSet`'s `perform_create` (in `backend/api/views.py`) to trigger `process_interview_transcription_task`.
+- [ ] **Step 10.I.7:** Implement strategy for associating mock interview questions with an `Interview` record (e.g., add `questions_json` to `Interview` model, update serializer, viewset).
 
-### II. Frontend: Mock Interview Setup & Interface (`MockInterviewPage.tsx` & related):
+### II. Frontend: Mock Interview Interface (`MockInterviewInterface.tsx`)
 - [ ] **Logic for Using Stored vs. Newly Generated Questions:**
     - [ ] Use `UserProfile.generated_mock_questions` if no new files uploaded.
     - [ ] Trigger new generation if new resume/JD uploaded; use these new questions.
@@ -333,3 +299,7 @@
     - [ ] Error handling (mic permissions, TTS, upload).
 - [ ] **UI/UX for Displaying Interviews:**
     - [ ] Consistent look and feel with conversation list/cards.
+
+### V. General
+- [ ] **Step 10.V.1:** Error handling and notifications throughout the new flows.
+- [ ] **Step 10.V.2:** UI/UX polish for the mock interview feature.

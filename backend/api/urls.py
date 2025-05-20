@@ -6,12 +6,14 @@ from .views import (
     generate_audio_download_url, 
     UserProfileView,
     GetMockInterviewQuestionsView,
-    register_user
+    register_user,
+    InterviewViewSet
 )
 
 # Create a router and register our viewset with it.
 router = DefaultRouter()
 router.register(r'conversations', ConversationViewSet, basename='conversation')
+router.register(r'interviews', InterviewViewSet, basename='interview')
 
 # The API URLs are now determined automatically by the router.
 urlpatterns = [

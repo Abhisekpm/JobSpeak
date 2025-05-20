@@ -3,11 +3,12 @@ import apiClient from '../lib/apiClient';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, Loader2, Upload, FileText, CircleHelp, Trash2, X, Copy } from "lucide-react";
 import { Button } from '@/components/ui/button';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "../components/ui/use-toast";
+import MockInterviewInterface from '../components/MockInterviewInterface';
 
 interface UserProfileData {
   username: string;
@@ -33,10 +34,12 @@ const MockInterviewPage: React.FC = () => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null);
   const [currentJdUrl, setCurrentJdUrl] = useState<string | null>(null);
+  const [isInterviewStarted, setIsInterviewStarted] = useState(false);
 
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const jdInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const fetchProfile = useCallback(async (showLoadingToast = false) => {
     console.log("Fetching user profile for mock interview page...");
@@ -46,22 +49,23 @@ const MockInterviewPage: React.FC = () => {
     setIsProfileLoading(true);
     setProfileError(null);
 
-    setCurrentResumeUrl(null);
-    setCurrentJdUrl(null);
-    setStoredQuestions(null);
+    // setCurrentResumeUrl(null); // Keep current URLs until new ones are fetched or confirmed absent
+    // setCurrentJdUrl(null);
+    // setStoredQuestions(null); // Clear only before setting new values
 
     try {
       const response = await apiClient.get<UserProfileData>('/profile/');
       console.log("Profile data fetched:", response.data);
       setCurrentResumeUrl(response.data.resume);
       setCurrentJdUrl(response.data.job_description);
-      setStoredQuestions(response.data.generated_mock_questions || null);
+      setStoredQuestions(response.data.generated_mock_questions || null); // Correctly set stored questions
 
-      if (!hasAttemptedGenerationThisSession && response.data.generated_mock_questions) {
-        setGeneratedQuestions(response.data.generated_mock_questions);
-      } else if (!response.data.generated_mock_questions) {
-        if(!hasAttemptedGenerationThisSession) setGeneratedQuestions([]);
-      }
+      // Do not set generatedQuestions here. It's only for questions generated this session.
+      // if (!hasAttemptedGenerationThisSession && response.data.generated_mock_questions) {
+      //   setGeneratedQuestions(response.data.generated_mock_questions);
+      // } else if (!response.data.generated_mock_questions) {
+      //   if(!hasAttemptedGenerationThisSession) setGeneratedQuestions([]);
+      // }
 
     } catch (err: any) {
       console.error("Error fetching profile:", err);
@@ -71,10 +75,10 @@ const MockInterviewPage: React.FC = () => {
       }
       setProfileError(errorMsg);
       toast({ title: "Error Loading Profile", description: errorMsg, variant: "destructive" });
-      setCurrentResumeUrl(null);
-      setCurrentJdUrl(null);
-      setStoredQuestions(null);
-      setGeneratedQuestions([]);
+      setCurrentResumeUrl(null); // Clear on error
+      setCurrentJdUrl(null);   // Clear on error
+      setStoredQuestions(null); // Clear on error
+      // setGeneratedQuestions([]); // No, keep generatedQuestions if user was trying to generate then profile load failed. Let it be controlled by generation functions.
     } finally {
       setIsProfileLoading(false);
     }
@@ -84,31 +88,30 @@ const MockInterviewPage: React.FC = () => {
     fetchProfile();
   }, [fetchProfile]);
 
-  const fetchAndGenerateQuestions = useCallback(async () => {
+  const fetchAndGenerateQuestions = useCallback(async (): Promise<boolean> => {
     if (!currentResumeUrl || !currentJdUrl) {
         console.log("Cannot fetch questions: Missing resume or JD URL.");
         setQuestionError("Missing resume or job description. Please upload both files above.");
         setGeneratedQuestions([]);
         setIsLoadingQuestions(false);
         setHasAttemptedGenerationThisSession(true);
-        return;
+        return false;
     }
 
-    console.log("Fetching mock interview questions via button...");
+    console.log("Fetching mock interview questions...");
     setIsLoadingQuestions(true);
     setQuestionError(null);
     setHasAttemptedGenerationThisSession(true);
-    setStoredQuestions(null);
+    setGeneratedQuestions([]);
     try {
       const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
       console.log("Questions Response received:", response.data);
       const fetchedQuestions = response.data.questions || [];
       setGeneratedQuestions(fetchedQuestions);
       if (fetchedQuestions.length > 0) {
-         // Optionally, you could re-fetch profile here to get the saved questions into storedQuestions state
-         // but since the backend saves them and returns them, generatedQuestions is up-to-date.
-         // await fetchProfile(); 
+        return true;
       }
+      return false;
     } catch (err: any) {
       console.error("Error fetching mock interview questions:", err);
       const errorData = err.response?.data?.error;
@@ -127,10 +130,30 @@ const MockInterviewPage: React.FC = () => {
 
       setQuestionError(errorMsg);
       setGeneratedQuestions([]);
+      return false;
     } finally {
       setIsLoadingQuestions(false);
     }
   }, [currentResumeUrl, currentJdUrl]);
+
+  useEffect(() => {
+    const autoStartParams = location.state as { autoStartGeneration?: boolean } | null;
+    if (autoStartParams?.autoStartGeneration && !isProfileLoading && currentResumeUrl && currentJdUrl) {
+      console.log("Auto-starting question generation due to navigation state...");
+      navigate(location.pathname, { replace: true, state: {} }); 
+
+      setHasAttemptedGenerationThisSession(true);
+
+      fetchAndGenerateQuestions().then((success) => {
+        if (success) {
+          console.log("Auto-generation successful, starting interview interface.");
+          setIsInterviewStarted(true);
+        } else {
+          console.log("Auto-generation failed or no questions returned.");
+        }
+      });
+    }
+  }, [location.state, isProfileLoading, currentResumeUrl, currentJdUrl, navigate, fetchAndGenerateQuestions]);
 
   const uploadSingleFile = async (file: File, fileType: 'resume' | 'jd') => {
     const setIsUploading = fileType === 'resume' ? setIsUploadingResume : setIsUploadingJd;
@@ -140,7 +163,6 @@ const MockInterviewPage: React.FC = () => {
     setQuestionError(null);
     setHasAttemptedGenerationThisSession(false);
     setGeneratedQuestions([]);
-    setStoredQuestions(null);
     console.log(`Attempting to upload ${fileType}:`, file.name);
     const formData = new FormData();
     formData.append(fieldName, file);
@@ -195,7 +217,6 @@ const MockInterviewPage: React.FC = () => {
     setQuestionError(null);
     setHasAttemptedGenerationThisSession(false);
     setGeneratedQuestions([]);
-    setStoredQuestions(null);
     console.log(`Attempting to clear ${fileType}...`);
     try {
       await apiClient.patch<UserProfileData>('/profile/', { [fieldName]: null });
@@ -229,17 +250,26 @@ const MockInterviewPage: React.FC = () => {
       fetchAndGenerateQuestions();
   };
 
+  // Determine which set of questions to display or pass to the interview interface
+  let questionsToDisplay: string[] = [];
+  if (hasAttemptedGenerationThisSession && generatedQuestions.length > 0) {
+    questionsToDisplay = generatedQuestions;
+  } else if (storedQuestions && storedQuestions.length > 0) {
+    questionsToDisplay = storedQuestions;
+  }
+  // If both are empty, questionsToDisplay remains []
+
   const handleCopyQuestions = async () => {
-    const questionsToCopy = generatedQuestions.length > 0 ? generatedQuestions : storedQuestions;
-    if (!questionsToCopy || questionsToCopy.length === 0) {
+    const questionsText = questionsToDisplay.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    if (questionsToDisplay.length === 0) {
       toast({
         title: "No Questions to Copy",
-        description: "Please generate or load questions first.",
+        description: "Please upload files and generate questions, or ensure stored questions are loaded.",
         variant: "destructive",
       });
       return;
     }
-    const questionsText = questionsToCopy.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    // const questionsText = questionsToCopy.map((q, i) => `${i + 1}. ${q}`).join('\n');
     try {
       await navigator.clipboard.writeText(questionsText);
       toast({
@@ -258,9 +288,37 @@ const MockInterviewPage: React.FC = () => {
 
   const isGenerateDisabled = isLoadingQuestions || isProfileLoading || !currentResumeUrl || !currentJdUrl;
 
-  const displayQuestions = hasAttemptedGenerationThisSession ? generatedQuestions : (storedQuestions || []);
-
   const showAttemptedGenerationMessage = hasAttemptedGenerationThisSession || (storedQuestions && storedQuestions.length > 0);
+
+  const handleStartInterview = () => {
+    if (questionsToDisplay.length > 0) {
+      setIsInterviewStarted(true);
+    } else {
+      toast({ title: "No Questions", description: "Cannot start interview without questions.", variant: "destructive" });
+    }
+  };
+
+  const handleEndInterview = () => {
+    setIsInterviewStarted(false);
+    // Optionally, reset or refetch questions/profile state if needed after an interview ends
+    // For now, just return to the setup/question display view.
+    // fetchProfile(); // Could refetch profile to ensure question state is fresh
+  };
+
+  if (isInterviewStarted) {
+    return (
+      <MockInterviewInterface
+        // For now, we are not managing question iteration from this parent component.
+        // The MockInterviewInterface itself will need to handle question progression from the passed list.
+        // We can pass the full list and let it manage current index, or enhance onNextQuestion prop later.
+        initialQuestion={questionsToDisplay.length > 0 ? questionsToDisplay[0] : "No questions available."}
+        // Pass all questions to the interface so it can manage them
+        questions={questionsToDisplay} 
+        onEndInterview={handleEndInterview}
+        // onNextQuestion prop can be implemented later if parent needs to control question flow dynamically
+      />
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6 relative">
@@ -357,7 +415,7 @@ const MockInterviewPage: React.FC = () => {
           {showAttemptedGenerationMessage && (
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold tracking-tight">Generated Questions</h2>
-              {displayQuestions.length > 0 && !isLoadingQuestions && !questionError && (
+              {questionsToDisplay.length > 0 && !isLoadingQuestions && !questionError && (
                 <Button onClick={handleCopyQuestions} variant="outline" size="sm">
                   <Copy className="mr-2 h-4 w-4" />
                   Copy
@@ -383,11 +441,11 @@ const MockInterviewPage: React.FC = () => {
             </Alert>
           )}
 
-          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && displayQuestions.length > 0 && (
+          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && questionsToDisplay.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Here are some questions based on your uploaded resume and job description. Have a friend conduct the mock interview and record your response for getting coaching feedback.</p>
               <ul className="list-decimal list-inside space-y-3 pl-4">
-                {displayQuestions.map((question, index) => (
+                {questionsToDisplay.map((question, index) => (
                   <li key={index} className="text-lg">
                     {question}
                   </li>
@@ -396,7 +454,7 @@ const MockInterviewPage: React.FC = () => {
             </div>
           )}
 
-          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && displayQuestions.length === 0 && (
+          {showAttemptedGenerationMessage && !isLoadingQuestions && !questionError && questionsToDisplay.length === 0 && (
              <p className="text-muted-foreground text-center py-6">No questions available. Please check your uploaded files or try generating new questions.</p>
           )}
 
@@ -404,6 +462,28 @@ const MockInterviewPage: React.FC = () => {
              <p className="text-muted-foreground text-center py-6">Upload a resume and a target job description, then click the button above to generate questions.</p>
            )}
       </div>
+
+      {questionsToDisplay.length > 0 && (
+        <div className="flex space-x-2 mt-4">
+          <Button onClick={handleCopyQuestions} variant="outline">
+            Copy
+          </Button>
+          <Button 
+            onClick={() => {
+              if (questionsToDisplay.length > 0) {
+                // navigate('/mock-interview-start', { state: { questions: questionsToDisplay } }); // Example navigation
+                // toast({ title: "Feature Coming Soon", description: "Starting the interactive mock interview is next!"});
+                handleStartInterview();
+              } else {
+                toast({ title: "No Questions", description: "Cannot start interview without questions.", variant: "destructive"});
+              }
+            }}
+            disabled={questionsToDisplay.length === 0 || isLoadingQuestions}
+          >
+            Start Mock Interview
+          </Button>
+        </div>
+      )}
 
     </div>
   );
