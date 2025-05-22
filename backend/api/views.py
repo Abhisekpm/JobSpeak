@@ -22,6 +22,11 @@ import os
 import traceback
 from .services.mock_interview import extract_text_from_file, generate_mock_questions
 
+# Imports for Deepgram TTS
+from django.http import StreamingHttpResponse
+from deepgram import DeepgramClient, SpeakOptions # Make sure SpeakOptions is imported
+from django.conf import settings # To access DEEPGRAM_API_KEY if stored in settings
+
 User = get_user_model()
 
 # Add user registration view
@@ -575,3 +580,66 @@ class InterviewViewSet(viewsets.ModelViewSet):
                 print(f"ERROR deleting interview audio file from S3 {audio_file_name}: {s3_exc}")
 
 # --- End Interview ViewSet ---
+
+# --- Deepgram TTS View ---
+class GenerateTTSAudioView(APIView):
+    permission_classes = [IsAuthenticated] # Protect this endpoint
+
+    def post(self, request, *args, **kwargs):
+        text_to_speak = request.data.get('text')
+        if not text_to_speak:
+            return Response({"error": "No text provided for TTS."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Initialize Deepgram client
+            # Assumes DEEPGRAM_API_KEY is in your environment variables (e.g., .env file)
+            # and loaded by Django (e.g. python-dotenv in manage.py or settings.py)
+            api_key = os.environ.get('DEEPGRAM_API_KEY')
+            if not api_key:
+                print("ERROR: DEEPGRAM_API_KEY not found in environment for TTS view.")
+                return Response({"error": "TTS service not configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            deepgram = DeepgramClient(api_key)
+
+            # Configure speak options
+            # Refer to Deepgram SpeakOptions documentation for available models and options
+            # https://developers.deepgram.com/docs/speak-options
+            options = SpeakOptions(
+                model="aura-asteria-en", # Example model, choose based on your needs
+                encoding="linear16",      # Audio encoding for WAV
+                container="wav", # Expected container
+                sample_rate=24000     # Aura models often default to 24kHz
+            )
+            
+            print(f"Requesting TTS from Deepgram for text: '{text_to_speak[:50]}...' with options: model={options.model}, encoding={options.encoding}, container={options.container}, sample_rate={options.sample_rate}")
+            # Use the stream method for TTS
+            response_stream = deepgram.speak.v("1").stream({'text': text_to_speak}, options)
+            
+            # The response_stream object from Deepgram SDK (v3+) has a 'stream' attribute
+            # which is an HTTPX ReadStream. We need to iterate over this stream.
+            # StreamingHttpResponse expects an iterator that yields byte strings.
+
+            if hasattr(response_stream, 'stream') and response_stream.stream:
+                # Define a generator function to iterate over the stream chunks
+                def audio_chunk_generator():
+                    for chunk in response_stream.stream:
+                        yield chunk
+                
+                # For debugging, you can check the headers from response_stream.headers
+                # print(f"Deepgram TTS Response Headers: {response_stream.headers}")
+                # content_type = response_stream.headers.get('Content-Type', 'audio/mpeg') # Get actual content type
+
+                return StreamingHttpResponse(
+                    audio_chunk_generator(), 
+                    content_type='audio/wav' # Ensure this matches your SpeakOptions container
+                )
+            else:
+                print("ERROR: Deepgram TTS stream was not available in the response.")
+                return Response({"error": "Failed to get audio stream from TTS provider."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            print(f"ERROR during Deepgram TTS request: {e}")
+            traceback.print_exc()
+            return Response({"error": "An error occurred while generating speech."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- End Deepgram TTS View ---

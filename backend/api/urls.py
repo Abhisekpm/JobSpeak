@@ -7,7 +7,8 @@ from .views import (
     UserProfileView,
     GetMockInterviewQuestionsView,
     register_user,
-    InterviewViewSet
+    InterviewViewSet,
+    GenerateTTSAudioView
 )
 
 # Create a router and register our viewset with it.
@@ -23,4 +24,5 @@ urlpatterns = [
     path('conversations/<int:pk>/download_audio/', generate_audio_download_url, name='download-audio'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('mock-interview-questions/', GetMockInterviewQuestionsView.as_view(), name='mock-interview-questions'),
+    path('tts/', GenerateTTSAudioView.as_view(), name='generate-tts'),
 ] 
