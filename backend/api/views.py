@@ -509,75 +509,120 @@ class InterviewViewSet(viewsets.ModelViewSet):
         return InterviewSerializer
 
     def perform_create(self, serializer):
-        """Save the interview instance, handle S3 audio upload, and trigger transcription task."""
-        audio_file_data = serializer.validated_data.pop('audio_file', None)
-        # Ensure 'questions_used' is handled correctly by the serializer directly or here.
-        # For now, assuming InterviewCreateSerializer handles it.
+        """
+        Save the interview instance, handle multiple S3 answer audio uploads,
+        and trigger transcription task.
+        """
         user = self.request.user
-
+        # The serializer will handle 'name' and 'questions_used'.
+        # 'audio_file' and 'duration' are no longer expected from the serializer directly in this new flow.
+        
+        # Save the instance first to get an ID. 
+        # 'questions_used' should be handled by the serializer.
         instance = serializer.save(user=user)
         print(f"Saved initial Interview with ID: {instance.id} for user: {user.username}")
 
-        if audio_file_data:
-            print(f"Attempting to save interview audio file explicitly using S3Boto3Storage instance...")
-            try:
-                s3_storage = S3Boto3Storage()
-                file_name = instance.audio_file.field.generate_filename(instance, audio_file_data.name)
-                actual_name_saved = s3_storage.save(file_name, audio_file_data)
-                
-                if actual_name_saved:
-                    print(f"Successfully saved interview audio file to S3 with key: {actual_name_saved}")
-                    instance.audio_file.name = actual_name_saved
-                    instance.save(update_fields=['audio_file'])
-                    print(f"Updated interview instance {instance.id} audio_file field in DB.")
-                else:
-                    raise ValueError("S3 save failed to return name for interview audio.")
-
-            except Exception as e:
-                print(f"ERROR explicitly saving interview audio file to S3 for instance {instance.id}: {e}")
-                instance.delete() # Clean up the interview instance if S3 upload failed
-                raise
+        answer_audio_files = []
+        # Collect answer audio files from request.FILES
+        # Files are expected to be named 'answer_audio_0', 'answer_audio_1', etc.
+        i = 0
+        while True:
+            file_key = f'answer_audio_{i}'
+            if file_key in self.request.FILES:
+                answer_audio_files.append(self.request.FILES[file_key])
+                i += 1
+            else:
+                break
         
-        # Trigger background task for transcription
-        if instance.audio_file and instance.audio_file.name:
-            print(f"Scheduling background transcription task for Interview ID: {instance.id}")
-            # Ensure all necessary fields are set before scheduling
-            # For example, if the task expects questions_used to be non-null, verify here
-            # or ensure the model has a default.
+        print(f"Found {len(answer_audio_files)} answer audio files in the request for Interview ID: {instance.id}.")
+
+        saved_audio_keys = []
+        if answer_audio_files:
+            s3_storage = S3Boto3Storage()
+            for index, audio_file_data_item in enumerate(answer_audio_files):
+                # Construct a unique file name for S3
+                # Use audio_file_data_item.name to get original extension if available
+                original_extension = 'webm' # default
+                if hasattr(audio_file_data_item, 'name') and '.' in audio_file_data_item.name:
+                    original_extension = audio_file_data_item.name.split('.')[-1]
+                
+                file_name = f"interviews/{instance.id}/answers/answer_{index}.{original_extension}"
+                
+                print(f"Attempting to save interview answer audio file {index} to S3 with key: {file_name} for Interview ID: {instance.id}")
+                try:
+                    actual_name_saved = s3_storage.save(file_name, audio_file_data_item)
+                    if actual_name_saved:
+                        print(f"Successfully saved answer audio file {index} to S3 with key: {actual_name_saved} for Interview ID: {instance.id}")
+                        saved_audio_keys.append(actual_name_saved)
+                    else:
+                        # This case should ideally not happen if s3_storage.save doesn't error
+                        raise ValueError(f"S3 save for answer {index} failed to return name for Interview ID: {instance.id}.")
+                except Exception as e:
+                    print(f"ERROR explicitly saving answer audio file {index} to S3 for Interview ID: {instance.id}: {e}")
+                    # Critical decision: If one file fails, should we delete the instance and abort?
+                    # For now, raising to abort, which will delete the instance.
+                    instance.delete() # Clean up the interview instance if any S3 upload failed
+                    raise # Re-raise the exception to return a server error
+
+            # Save the list of S3 keys to the instance
+            # This assumes 'answer_audio_s3_keys' is a JSONField on the Interview model
+            instance.answer_audio_s3_keys = saved_audio_keys
+            instance.save(update_fields=['answer_audio_s3_keys'])
+            print(f"Updated Interview instance {instance.id} with {len(saved_audio_keys)} S3 audio keys.")
+
+        # Trigger background task for transcription if audio files were saved
+        if saved_audio_keys:
+            print(f"Scheduling background transcription task for Interview ID: {instance.id} with {len(saved_audio_keys)} audio files.")
             instance.status_transcription = Interview.STATUS_PENDING
             instance.status_analysis = Interview.STATUS_PENDING
             instance.status_coaching = Interview.STATUS_PENDING
             instance.save(update_fields=['status_transcription', 'status_analysis', 'status_coaching', 'updated_at'])
             
-            process_interview_transcription_task(instance.id, schedule=1) # Schedule with a 1-second delay
+            # The task will now need to be aware of 'answer_audio_s3_keys'
+            process_interview_transcription_task(instance.id, schedule=1)
             print(f"Successfully scheduled transcription task for Interview ID: {instance.id}")
-        elif not audio_file_data:
-            # No audio file uploaded, so transcription cannot proceed.
-            print(f"No audio file uploaded for Interview ID: {instance.id}. Transcription not triggered.")
+        else:
+            # No audio files uploaded or saved.
+            print(f"No answer audio files processed for Interview ID: {instance.id}. Transcription not triggered.")
             instance.status_transcription = Interview.STATUS_FAILED
-            instance.status_analysis = Interview.STATUS_FAILED # No analysis if no transcript
-            instance.status_coaching = Interview.STATUS_FAILED # No coaching if no transcript
+            instance.status_analysis = Interview.STATUS_FAILED
+            instance.status_coaching = Interview.STATUS_FAILED
             instance.save(update_fields=['status_transcription', 'status_analysis', 'status_coaching', 'updated_at'])
         
         # serializer.instance is already set by serializer.save()
         # No need to call super().perform_create(serializer) as we've handled the save.
 
     def perform_destroy(self, instance):
-        """Delete the interview instance and its associated audio file from S3."""
-        audio_file_name = None
-        if instance.audio_file and instance.audio_file.name:
-            audio_file_name = instance.audio_file.name
+        """Delete the interview instance and its associated audio files from S3."""
+        # This method will also need to be updated to use instance.answer_audio_s3_keys
+        s3_keys_to_delete = getattr(instance, 'answer_audio_s3_keys', [])
+        instance_id_for_logging = instance.id # Capture id before super().perform_destroy()
+        
+        original_audio_file_name = None # Keep for legacy single file if needed during transition
+        if hasattr(instance, 'audio_file') and instance.audio_file and instance.audio_file.name:
+            original_audio_file_name = instance.audio_file.name
 
         super().perform_destroy(instance) # Delete DB record
 
-        if audio_file_name:
-            print(f"Attempting to delete interview audio file from S3: {audio_file_name}")
-            try:
-                s3_storage = S3Boto3Storage()
-                s3_storage.delete(audio_file_name)
-                print(f"Successfully deleted interview audio file from S3: {audio_file_name}")
-            except Exception as s3_exc:
-                print(f"ERROR deleting interview audio file from S3 {audio_file_name}: {s3_exc}")
+        if s3_keys_to_delete:
+            s3_storage = S3Boto3Storage()
+            print(f"Attempting to delete {len(s3_keys_to_delete)} answer audio files from S3 for Interview ID: {instance_id_for_logging}")
+            for key in s3_keys_to_delete:
+                try:
+                    s3_storage.delete(key)
+                    print(f"Successfully deleted S3 key: {key}")
+                except Exception as s3_exc:
+                    print(f"ERROR deleting S3 key {key} for Interview ID {instance_id_for_logging}: {s3_exc}")
+        elif original_audio_file_name: # Fallback for old records during transition
+             print(f"Attempting to delete legacy single interview audio file from S3: {original_audio_file_name} for Interview ID: {instance_id_for_logging}")
+             s3_storage = S3Boto3Storage() # Ensure storage is initialized here too
+             try:
+                 s3_storage.delete(original_audio_file_name)
+                 print(f"Successfully deleted legacy single interview audio file from S3: {original_audio_file_name}")
+             except Exception as s3_exc:
+                 print(f"ERROR deleting legacy single interview audio file from S3 {original_audio_file_name} for Interview ID {instance_id_for_logging}: {s3_exc}")
+        else:
+            print(f"No S3 keys found to delete for Interview ID: {instance_id_for_logging}")
 
 # --- End Interview ViewSet ---
 

@@ -266,26 +266,81 @@
 - [x] **Step 10.I.4:** Create Background Tasks for Interview Processing (`process_interview_transcription_task`, `process_interview_analysis_task`, `process_interview_coaching_task` in `backend/api/tasks.py`).
 - [ ] **Step 10.I.5:** Refactor service functions (`analyze_conversation` in `services/analysis.py` and `generate_coaching_feedback` in `services/coaching.py`) to be generic or handle `Interview` objects.
 - [ ] **Step 10.I.6:** Update `InterviewViewSet`'s `perform_create` (in `backend/api/views.py`) to trigger `process_interview_transcription_task`.
-- [ ] **Step 10.I.7:** Implement strategy for associating mock interview questions with an `Interview` record (e.g., add `questions_json` to `Interview` model, update serializer, viewset).
+- [x] **Step 10.I.7:** Implement strategy for associating mock interview questions with an `Interview` record (e.g., add `questions_json` to `Interview` model, update serializer, viewset). - *Implemented as `questions_used` (JSONField) on Interview model*
 
 ### II. Frontend: Mock Interview Interface (`MockInterviewInterface.tsx`)
-- [ ] **Logic for Using Stored vs. Newly Generated Questions:**
-    - [ ] Use `UserProfile.generated_mock_questions` if no new files uploaded.
-    - [ ] Trigger new generation if new resume/JD uploaded; use these new questions.
-    - [ ] Pass the final list of questions to `MockInterviewInterface.tsx`.
-- [ ] **`MockInterviewInterface.tsx` - Core Recording Flow:**
-    - [ ] State: `currentQuestionIndex`, `isRecording`, `audioBlobs`, `isReadingQuestion`.
-    - [ ] TTS for Questions: Use Deepgram TTS for each question.
-    - [ ] Audio Recording: Use `MediaRecorder` for user's answer.
-    - [ ] UI: Buttons for "Start/Stop Recording Answer", "Next Question", "End Interview".
-    - [ ] Progression: Loop: Read question (TTS) -> Record Answer -> Next.
-    - [ ] On "End Interview": Combine `audioBlobs`, calculate `duration`.
-- [ ] **Submitting Recorded Interview:**
-    - [ ] `FormData`: Append audio file, `questions_used` (JSON string), `duration`.
-    - [ ] POST to `/api/interviews/`.
-    - [ ] Handle loading states, success/error messages.
+- [x] **Logic for Using Stored vs. Newly Generated Questions:**
+    - [x] Use `UserProfile.generated_mock_questions` if no new files uploaded.
+    - [x] Trigger new generation if new resume/JD uploaded; use these new questions.
+    - [x] Pass the final list of questions to `MockInterviewInterface.tsx`.
+- [x] **`MockInterviewInterface.tsx` - Core Recording Flow:**
+    - [x] State: `currentQuestionIndex`, `isRecording`, `audioBlobs`, `isReadingQuestion`, `initialQuestionHasBeenSpoken`.
+    - [x] TTS for Questions: Use Deepgram TTS for each question.
+    - [x] Audio Recording: Use `MediaRecorder` for user's answer. Recording starts automatically after TTS.
+    - [x] UI: Buttons for "Pause Recording", "Next Question", "End Interview".
+    - [x] Progression: Loop: Read question (TTS) -> Record Answer -> Next.
+    - [x] On "End Interview": Combine `audioBlobs` (single blob for now), calculate `totalDurationInSeconds`.
+- [x] **Submitting Recorded Interview (Initial - Single Combined Audio):**
+    - [x] `FormData`: Append combined audio file (`interview_audio.webm`), `name`, `duration`, `questions_used` (JSON string of questions up to `currentQuestionIndex`).
+    - [x] POST to `/api/interviews/`.
+    - [x] Handle loading states, success/error messages with improved backend error parsing.
 
-### III. Frontend: Displaying Mock Interviews (Home Page or Dedicated Section):
+### III. Refined Q&A Reconstruction and Processing (Per-Answer Audio)
+
+- [ ] **Frontend (`MockInterviewInterface.tsx` - Data Submission):**
+    - [ ] Modify `handleEndInterviewAndRecording`:
+        - [ ] Instead of combining blobs, iterate through `audioBlobs` (which should now store one blob per answer).
+        - [ ] For each blob, append it to `FormData` with a unique key (e.g., `answer_audio_0`, `answer_audio_1`, ...).
+        - [ ] Ensure `questions_used` (list of question strings) is still sent.
+        - [ ] Remove `duration` calculation and sending from frontend (backend will handle if needed, or sum of individual transcriptions).
+        - [ ] Ensure `name` is still sent.
+    - [ ] Modify `audioBlobs` state to store an array of `Blob` objects, one for each answer.
+    - [ ] Ensure `startAnswerRecording` correctly pushes new blobs to this array.
+
+- [ ] **Backend API (`InterviewViewSet` in `views.py`):**
+    - [ ] Modify `perform_create` (or `create` method if overridden) in `InterviewViewSet`:
+        - [ ] Expect multiple audio files in `request.FILES` (e.g., `answer_audio_0`, `answer_audio_1`, ...).
+        - [ ] Iterate through these files. For each file:
+            - [ ] Save it to S3 (e.g., `interview_<interview_id>/answer_<index>.webm`).
+            - [ ] Collect the S3 keys/URLs.
+        - [ ] Add a new `JSONField` to the `Interview` model, e.g., `answer_audio_s3_keys` (stores a list of these S3 keys/URLs).
+        - [ ] Save this list of S3 keys/URLs to the new field on the `Interview` instance.
+        - [ ] `questions_used` (list of question strings) should still be saved (likely to `questions_json` or `questions_used` field as before).
+        - [ ] Remove `audio_file` field from `Interview` model if it's no longer used for a single combined file. Update serializers accordingly.
+        - [ ] Remove `duration` field from `Interview` model if it's no longer directly uploaded or calculated at creation.
+
+- [ ] **Backend Transcription Task (`process_interview_transcription_task` in `tasks.py`):**
+    - [ ] Modify `process_interview_transcription_task`:
+        - [ ] Fetch the `Interview` instance.
+        - [ ] Retrieve the list of S3 keys/URLs from `answer_audio_s3_keys`.
+        - [ ] Iterate through each S3 key/URL:
+            - [ ] Call `DeepgramTranscriptionService` for each individual answer audio.
+        - [ ] Store the resulting list of transcripts (e.g., list of Deepgram JSON responses or extracted text strings) in a new `JSONField` on the `Interview` model, e.g., `answer_transcripts_json`.
+        - [ ] Ensure `transcription_status` is updated appropriately (e.g., `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`).
+        - [ ] Update `transcription_text` field: Decide if it should store the first transcript, a concatenation, or be removed/repurposed if `answer_transcripts_json` is primary. For now, can be a simple concatenation for basic display if needed.
+        - [ ] Trigger `process_interview_analysis_task` as before.
+
+- [ ] **Backend Analysis Task (`process_interview_analysis_task` in `tasks.py`):**
+    - [ ] Modify `process_interview_analysis_task`:
+        - [ ] Fetch the `Interview` instance.
+        - [ ] Load `questions_used` (list of question strings).
+        - [ ] Load `answer_transcripts_json` (list of answer transcripts).
+        - [ ] Ensure `questions_used` and `answer_transcripts_json` have the same length for 1:1 mapping. Handle mismatches if necessary.
+        - [ ] **TODO:** Design/Implement `analyze_interview_performance_per_qna(question_text, answer_transcript)` service. This service will be called for each Q&A pair.
+        - [ ] Collect analysis results for each Q&A pair.
+        - [ ] Store the aggregated/list of analysis results in `analysis_results` (JSONField) on the `Interview` model.
+        - [ ] Trigger `process_interview_coaching_task`.
+
+- [ ] **Backend Coaching Task (`process_interview_coaching_task` in `tasks.py`):**
+    - [ ] Modify `process_interview_coaching_task`:
+        - [ ] Fetch the `Interview` instance.
+        - [ ] Load `questions_used`.
+        - [ ] Load `answer_transcripts_json`.
+        - [ ] Load `analysis_results` (which should now be structured per Q&A or overall based on per-Q&A analysis).
+        - [ ] **TODO:** Design/Implement `generate_interview_coaching_per_qna(question_text, answer_transcript, analysis_for_qna)` or an overall coaching service that uses the structured Q&A data.
+        - [ ] Store coaching feedback in `coaching_results` (JSONField) on the `Interview` model.
+
+### IV. Frontend: Displaying Mock Interviews (Home Page or Dedicated Section):
 - [ ] **Fetch and Display `Interview` Data:**
     - [ ] GET `/api/interviews/` on Home page / "Mock Interviews" section.
     - [ ] `InterviewCard` component (similar to `ConversationCard`).
@@ -293,13 +348,14 @@
     - [ ] Display questions, audio player, transcription, analysis, coaching feedback.
     - [ ] Show status of processing steps.
 
-### IV. Styling and UX:
+### V. Styling and UX:
 - [ ] **UI/UX for Recording Interface:**
     - [ ] Clear visual cues for recording states and actions.
     - [ ] Error handling (mic permissions, TTS, upload).
 - [ ] **UI/UX for Displaying Interviews:**
     - [ ] Consistent look and feel with conversation list/cards.
 
-### V. General
+### VI. General
 - [ ] **Step 10.V.1:** Error handling and notifications throughout the new flows.
 - [ ] **Step 10.V.2:** UI/UX polish for the mock interview feature.
+- [ ] **Step 10.VI.1:** Adapt `InterviewDetail` Page to display Q&A pairs, individual answer transcripts, and per-Q&A analysis/coaching if applicable.

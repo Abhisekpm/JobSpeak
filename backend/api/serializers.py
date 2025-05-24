@@ -223,11 +223,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 # --- Interview Serializers ---
 class InterviewSerializer(serializers.ModelSerializer):
-    audio_file_url = serializers.SerializerMethodField()
+    # audio_file_url = serializers.SerializerMethodField() # No longer needed if we don't have a single primary audio file
     status_transcription_display = serializers.CharField(source='get_status_transcription_display', read_only=True)
     status_analysis_display = serializers.CharField(source='get_status_analysis_display', read_only=True)
     status_coaching_display = serializers.CharField(source='get_status_coaching_display', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
+    # answer_audio_s3_keys could be exposed if needed for client, e.g., for playing back individual answers
+    # For now, keeping it backend-internal primarily for processing tasks.
+    # If needed, add: answer_audio_s3_keys = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Interview
@@ -239,12 +242,13 @@ class InterviewSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'questions_used',
-            'audio_file',
-            'audio_file_url',
-            'duration',
+            # 'audio_file', # Removed
+            # 'audio_file_url', # Removed
+            # 'duration', # Removed
+            'answer_audio_s3_keys', # Added, make read-only or remove if not for client
             'status_transcription',
             'status_transcription_display',
-            'transcription_text',
+            'transcription_text', # This might store combined transcript or first one. Or be removed if using a new field for list of transcripts
             'status_analysis',
             'status_analysis_display',
             'analysis_results',
@@ -258,7 +262,8 @@ class InterviewSerializer(serializers.ModelSerializer):
             'username',
             'created_at',
             'updated_at',
-            'audio_file_url',
+            # 'audio_file_url', # Removed
+            'answer_audio_s3_keys', # Make read-only
             'status_transcription',
             'status_transcription_display',
             'transcription_text',
@@ -270,47 +275,45 @@ class InterviewSerializer(serializers.ModelSerializer):
             'coaching_feedback',
         ]
 
-    def get_audio_file_url(self, obj):
-        if obj.audio_file and hasattr(obj.audio_file, 'url'):
-            try:
-                return obj.audio_file.url
-            except Exception as e:
-                print(f"ERROR generating S3 URL for Interview {obj.id} audio file {obj.audio_file.name}: {e}")
-                return None
-        return None
+    # def get_audio_file_url(self, obj): # Removed
+    #     if obj.audio_file and hasattr(obj.audio_file, 'url'):
+    #         try:
+    #             return obj.audio_file.url
+    #         except Exception as e:
+    #             print(f"ERROR generating S3 URL for Interview {obj.id} audio file {obj.audio_file.name}: {e}")
+    #             return None
+    #     return None
 
 class InterviewCreateSerializer(serializers.ModelSerializer):
-    audio_file = serializers.FileField(write_only=True, required=True)
+    # audio_file = serializers.FileField(write_only=True, required=True) # Removed, files handled by view
     name = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    duration = serializers.FloatField(required=True, write_only=True)
-    questions_used = serializers.JSONField(required=True, write_only=True) # Expecting a list of strings
+    # duration = serializers.FloatField(required=True, write_only=True) # Removed
+    questions_used = serializers.JSONField(required=True) # Expecting a list of strings
 
     class Meta:
         model = Interview
-        fields = ['id', 'name', 'audio_file', 'duration', 'questions_used']
+        # fields = ['id', 'name', 'audio_file', 'duration', 'questions_used'] # Old
+        fields = ['id', 'name', 'questions_used'] # answer_audio_s3_keys is not set here
         read_only_fields = ['id']
 
     def create(self, validated_data):
         name = validated_data.pop('name', None)
-        duration = validated_data.pop('duration')
+        # duration = validated_data.pop('duration') # Removed
         questions_used = validated_data.pop('questions_used')
-        # The rest of validated_data should be audio_file, handled by super or ModelViewSet implicitly if user is set in view
+        
+        # User is set in the view (perform_create)
+        user = self.context['request'].user
 
         if not name:
-            # Create a default name if none provided, e.g., based on user and timestamp or count
-            # For simplicity, let's use a generic default for now.
-            # user = self.context['request'].user # Assuming request context is passed to serializer
-            # timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
-            # name = f"Mock Interview - {user.username} - {timestamp}"
-            # For now, a simpler default, can be refined in the view if request context isn't standard here.
-            existing_count = Interview.objects.filter(user=self.context['request'].user).count()
+            existing_count = Interview.objects.filter(user=user).count()
             name = f"Mock Interview {existing_count + 1}"
 
+        # 'answer_audio_s3_keys' will be populated in the view after files are uploaded to S3
+        # 'audio_file' and 'duration' are no longer model fields being set here.
         interview = Interview.objects.create(
-            user=self.context['request'].user, # User must be set, typically from request in the view
+            user=user,
             name=name,
-            duration=duration,
             questions_used=questions_used,
-            **validated_data # This will pass audio_file if it's still in validated_data
+            **validated_data # Should be empty now unless other fields are added
         )
         return interview

@@ -218,8 +218,18 @@ class Interview(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     questions_used = models.JSONField(null=True, blank=True, help_text="List of questions asked during this interview.")
-    audio_file = models.FileField(upload_to=interview_audio_path, null=True, blank=True)
-    duration = models.PositiveIntegerField(null=True, blank=True, help_text="Duration of the audio in seconds")
+    answer_audio_s3_keys = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        help_text="List of S3 keys for individual answer audio files."
+    )
+    answer_transcripts_json = models.JSONField( 
+        default=list, 
+        blank=True, 
+        null=True, 
+        help_text="List of structured JSON transcription results for each answer."
+    )
 
     # --- Transcription Fields ---
     status_transcription = models.CharField(
