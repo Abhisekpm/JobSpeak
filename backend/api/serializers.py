@@ -285,35 +285,31 @@ class InterviewSerializer(serializers.ModelSerializer):
     #     return None
 
 class InterviewCreateSerializer(serializers.ModelSerializer):
-    # audio_file = serializers.FileField(write_only=True, required=True) # Removed, files handled by view
     name = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    # duration = serializers.FloatField(required=True, write_only=True) # Removed
-    questions_used = serializers.JSONField(required=True) # Expecting a list of strings
+    questions_used = serializers.JSONField(required=True)
+    # user = serializers.PrimaryKeyRelatedField(read_only=True) # Option 1: Make it read-only if present
+    # Option 2: Or ensure it's not a writable field the client can send, and rely on view to inject
 
     class Meta:
         model = Interview
-        # fields = ['id', 'name', 'audio_file', 'duration', 'questions_used'] # Old
-        fields = ['id', 'name', 'questions_used'] # answer_audio_s3_keys is not set here
+        fields = ['id', 'name', 'questions_used'] # 'user' is not included here for client input
         read_only_fields = ['id']
 
     def create(self, validated_data):
+        # user is automatically passed into validated_data by serializer.save(user=request.user) in the view
+        user = validated_data.pop('user') 
         name = validated_data.pop('name', None)
-        # duration = validated_data.pop('duration') # Removed
         questions_used = validated_data.pop('questions_used')
         
-        # User is set in the view (perform_create)
-        user = self.context['request'].user
-
         if not name:
             existing_count = Interview.objects.filter(user=user).count()
             name = f"Mock Interview {existing_count + 1}"
 
-        # 'answer_audio_s3_keys' will be populated in the view after files are uploaded to S3
-        # 'audio_file' and 'duration' are no longer model fields being set here.
+        # validated_data should now be empty or contain any other fields you might add to Meta.fields later
         interview = Interview.objects.create(
             user=user,
             name=name,
             questions_used=questions_used,
-            **validated_data # Should be empty now unless other fields are added
+            **validated_data
         )
         return interview

@@ -3,7 +3,9 @@ import json # Import the json library
 import logging # Import logging
 
 from .models import Conversation, Interview
-from background_task import background # Import the background decorator
+# from celery import shared_task # REMOVE THIS
+from background_task import background # ADD THIS BACK
+
 # Import the services
 from .services.transcription import DeepgramTranscriptionService
 from .services.recap import recap_interview # Corrected import name
@@ -16,8 +18,7 @@ from storages.backends.s3boto3 import S3Boto3Storage
 task_logger = logging.getLogger('background_tasks')
 task_logger.setLevel(logging.INFO)
 
-# Use the @background decorator
-@background(schedule=1) # Schedule to run 1 second after being called
+@background(schedule=1) # REVERTED DECORATOR and added default schedule
 def process_transcription_task(conversation_id):
     """
     Background task to process transcription using Deepgram service.
@@ -102,7 +103,7 @@ def process_transcription_task(conversation_id):
 
         # --- Trigger Recap Task ---
         task_logger.info(f"[Transcription Task] Scheduling recap task for Conversation ID: {conversation.id}")
-        process_recap_task(conversation.id, schedule=5) # Schedule recap 5 seconds later
+        process_recap_task(conversation.id, schedule=5) # REVERTED CALL with schedule
         # --------------------------
 
     except Exception as e:
@@ -119,8 +120,7 @@ def process_transcription_task(conversation_id):
         except Exception as save_exc:
             task_logger.error(f"[Transcription Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
 
-# --- Recap Task ---
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_recap_task(conversation_id):
     """
     Background task to generate a recap for a completed transcription.
@@ -207,8 +207,7 @@ def process_recap_task(conversation_id):
             task_logger.error(f"[Recap Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
 
 
-# --- Summary Task ---
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_summary_task(conversation_id):
     """
     Background task to generate detailed, balanced, and short summaries in a chain.
@@ -305,8 +304,7 @@ def process_summary_task(conversation_id):
             task_logger.error(f"[Summary Task] Could not mark as failed after unexpected error for Conversation ID {conversation.id}: {save_exc}")
 
 
-# --- NEW Analysis Task ---
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_analysis_task(conversation_id):
     """
     Background task to generate conversation analysis (talk time, sentiment, topics).
@@ -359,8 +357,7 @@ def process_analysis_task(conversation_id):
             task_logger.error(f"[Analysis Task] Could not mark as failed for Conversation ID {conversation.id}: {save_exc}")
 
 
-# --- NEW Coaching Task ---
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_coaching_task(conversation_id):
     """
     Background task to generate coaching feedback.
@@ -430,7 +427,7 @@ def process_coaching_task(conversation_id):
 
 # --- Interview Processing Tasks ---
 
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_interview_transcription_task(interview_id):
     task_logger.info(f"[Interview Transcription Task] Starting process for Interview ID: {interview_id}")
     interview = None # Initialize interview to None
@@ -458,17 +455,25 @@ def process_interview_transcription_task(interview_id):
             ])
             return
 
-        parsed_questions = []
-        if raw_questions_used:
+        parsed_questions = [] # Initialize as an empty list
+        if isinstance(raw_questions_used, list):
+            parsed_questions = raw_questions_used
+            task_logger.info(f"[Interview Transcription Task] 'questions_used' (ID: {interview.id}) is already a list.")
+        elif isinstance(raw_questions_used, str) and raw_questions_used.strip():
+            task_logger.info(f"[Interview Transcription Task] 'questions_used' (ID: {interview.id}) is a string. Attempting JSON parse.")
             try:
-                parsed_questions = json.loads(raw_questions_used)
-                if not isinstance(parsed_questions, list):
-                    task_logger.warning(f"[Interview Transcription Task] 'questions_used' for Interview {interview.id} is not a list. Will proceed without interleaving questions if possible.")
-                    parsed_questions = [] 
+                loaded_data = json.loads(raw_questions_used)
+                if isinstance(loaded_data, list):
+                    parsed_questions = loaded_data
+                else:
+                    task_logger.warning(f"[Interview Transcription Task] Parsed 'questions_used' string for Interview {interview.id} is not a list (Type: {type(loaded_data)}). Using empty list.")
             except json.JSONDecodeError:
-                task_logger.warning(f"[Interview Transcription Task] Failed to parse 'questions_used' for Interview {interview.id}. Will proceed without interleaving.")
-                parsed_questions = []
-        
+                task_logger.warning(f"[Interview Transcription Task] Failed to parse 'questions_used' string for Interview {interview.id}. Using empty list.")
+        elif raw_questions_used: # It exists but is not a list or string (or is an empty string)
+            task_logger.warning(f"[Interview Transcription Task] 'questions_used' for Interview {interview.id} is of unexpected type or empty string: {type(raw_questions_used)}. Using empty list.")
+        else: # raw_questions_used is None or empty
+            task_logger.info(f"[Interview Transcription Task] No 'questions_used' provided for Interview {interview.id}. Using empty list.")
+            
         fields_to_update_on_start = ['status_transcription', 'transcription_text', 'answer_transcripts_json']
         interview.transcription_text = None
         interview.answer_transcripts_json = json.dumps([])
@@ -489,11 +494,40 @@ def process_interview_transcription_task(interview_id):
 
         individual_structured_transcripts = []
         interleaved_qa_parts = []
-        s3_storage = S3Boto3Storage()
+        # s3_storage = S3Boto3Storage() # s3_storage.url() gives a basic URL, not necessarily presigned if objects are private
+        
+        # Initialize S3 client for generating presigned URLs
+        # Ensure AWS settings are configured in your Django settings.py
+        from django.conf import settings
+        import boto3 # Make sure boto3 is installed
+        s3_client = None
+        try:
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME,
+                config=boto3.session.Config(signature_version='s3v4') # Often needed for presigned URLs
+            )
+        except Exception as s3_client_err:
+            task_logger.error(f"[Interview Transcription Task] Failed to initialize S3 client: {s3_client_err}. Aborting.")
+            # Set appropriate failure status for the interview
+            if interview:
+                interview.status_transcription = Interview.STATUS_FAILED
+                interview.transcription_text = "[S3 client initialization failed]"
+                interview.answer_transcripts_json = json.dumps([{"error": "S3 client initialization failed"}])
+                interview.save(update_fields=['status_transcription', 'transcription_text', 'answer_transcripts_json', 'updated_at'])
+            return
+
         service = DeepgramTranscriptionService()
         deepgram_options = {
-            'model': 'nova-2', 'language': 'en-US', 'punctuate': True,
-            'diarize': False, 'utterances': True, 'smart_format': True,
+            'model': 'nova-2', 
+            'language': 'en-US',
+            'punctuate': False, 
+            'diarize': False, 
+            'utterances': False, 
+            'smart_format': False, 
+            'encoding': 'opus', # RE-ADDED for WEBM files
         }
         num_answers_to_process = len(s3_keys)
 
@@ -504,14 +538,32 @@ def process_interview_transcription_task(interview_id):
             
             answer_text_for_interleaving = "[Transcription for this answer failed or was empty]"
             current_answer_transcript_json = None
+            audio_url = None # Initialize audio_url for this iteration
 
             try:
                 if not isinstance(s3_key, str) or not s3_key.strip():
                     task_logger.warning(f"Invalid S3 key at index {index}: '{s3_key}'.")
                     raise ValueError(f"Invalid S3 key provided: {s3_key}")
                 
-                audio_url = s3_storage.url(s3_key)
-                task_logger.info(f"Audio URL for answer {index + 1}: {audio_url}")
+                # audio_url = s3_storage.url(s3_key) # OLD way
+                try:
+                    audio_url = s3_client.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': s3_key},
+                        ExpiresIn=3600  # URL valid for 1 hour
+                    )
+                    task_logger.info(f"Generated presigned Audio URL for answer {index + 1}: {audio_url}")
+                except Exception as presign_err:
+                    task_logger.error(f"Error generating presigned URL for S3 key {s3_key}: {presign_err}", exc_info=True)
+                    # Consider this a failure for this specific audio file
+                    current_answer_transcript_json = {"error": f"Failed to generate presigned URL: {str(presign_err)}"}
+                    answer_text_for_interleaving = "[Failed to get audio URL]"
+                    # Continue to next iteration after appending error info
+                    individual_structured_transcripts.append(current_answer_transcript_json)
+                    interleaved_qa_parts.append(f"Answer {index + 1}: {answer_text_for_interleaving}")
+                    continue # Skip to the next S3 key
+
+                task_logger.info(f"[DEEPGRAM_CALL] Using Audio URL: {audio_url}") # ADD THIS LOG
                 structured_result = service.get_full_transcript(audio_url=audio_url, **deepgram_options)
                 
                 if structured_result and isinstance(structured_result, dict):
@@ -541,7 +593,7 @@ def process_interview_transcription_task(interview_id):
         task_logger.info(f"[Interview Transcription Task] COMPLETED for Interview ID: {interview.id}. {len(individual_structured_transcripts)} answers attempted.")
 
         task_logger.info(f"[Interview Transcription Task] Scheduling analysis task for Interview ID: {interview.id}")
-        process_interview_analysis_task(interview.id, schedule=5)
+        process_interview_analysis_task(interview.id, schedule=5) # REVERTED CALL with schedule
 
     except Exception as e: # This is the main exception handler for the process
         task_logger.error(f"[Interview Transcription Task] Main task FAILED for Interview ID {interview_id}: {e}", exc_info=True)
@@ -569,7 +621,7 @@ def process_interview_transcription_task(interview_id):
             task_logger.error(f"[Interview Transcription Task] CRITICAL: Interview object was None when trying to save FAILED status for ID {interview_id}.")
 
 
-@background(schedule=1)
+@background(schedule=1) # REVERTED DECORATOR
 def process_interview_analysis_task(interview_id):
     """
     Background task to perform analysis on a transcribed interview.
@@ -628,7 +680,7 @@ def process_interview_analysis_task(interview_id):
 
         if interview.status_coaching == Interview.STATUS_PENDING:
             task_logger.info(f"[Interview Analysis Task] Scheduling coaching task for Interview ID: {interview.id}")
-            process_interview_coaching_task(interview.id, schedule=5)
+            process_interview_coaching_task(interview.id, schedule=5) # REVERTED CALL with schedule
 
     except Exception as e: # Main exception handler for the task operations
         task_logger.error(f"[Interview Analysis Task] Main task FAILED for Interview ID {interview_id}: {e}", exc_info=True)
@@ -646,7 +698,7 @@ def process_interview_analysis_task(interview_id):
             task_logger.error(f"[Interview Analysis Task] CRITICAL: Interview object was None when trying to handle main task failure for ID {interview_id}.")
 
 
-@background(schedule=10) # Assuming it runs after analysis
+@background(schedule=10) # REVERTED DECORATOR (keeping original schedule for this one)
 def process_interview_coaching_task(interview_id):
     """
     Background task to generate coaching feedback for an interview.

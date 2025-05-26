@@ -16,19 +16,40 @@ from pathlib import Path
 from datetime import timedelta # Keep existing timedelta import
 # from storages.backends.s3boto3 import S3Boto3Storage # Can likely remove this too if not used elsewhere directly
 
-# --- Force load .env here --- 
-# from dotenv import load_dotenv
-# env_path = Path(__file__).resolve().parent.parent / '.env' # Path relative to settings.py
-# print(f"DEBUG: Attempting to load .env from: {env_path}")
-# loaded = load_dotenv(dotenv_path=env_path)
-# print(f"DEBUG: dotenv loaded = {loaded}")
-# print(f"DEBUG settings.py: AWS_STORAGE_BUCKET_NAME = {os.environ.get('AWS_STORAGE_BUCKET_NAME')}")
-# print(f"DEBUG settings.py: AWS_ACCESS_KEY_ID = {os.environ.get('AWS_ACCESS_KEY_ID')}") 
-# print("---------------------------------")
-# --- End force load .env --- 
+# --- Load .env file ---
+from dotenv import load_dotenv # Ensure this import is present and uncommented
+
+# BASE_DIR is backend/backend, .env is likely in backend/ or the project root JobSpeakV2/
+# Let's assume .env is in the project root (JobSpeakV2/.env)
+# which is the parent of BASE_DIR.parent if BASE_DIR = backend/
+# BASE_DIR = Path(__file__).resolve().parent.parent # This is backend/
+# Project root would be BASE_DIR.parent = JobSpeakV2/
+# So, if .env is in JobSpeakV2/.env:
+_project_root_dir = Path(__file__).resolve().parent.parent.parent 
+# If settings.py is in backend/backend/settings.py:
+# Path(__file__).resolve() -> backend/backend/settings.py
+# .parent -> backend/backend/
+# .parent.parent -> backend/
+# .parent.parent.parent -> JobSpeakV2/ (project root)
+
+# env_path = _project_root_dir / '.env' # Old path assuming .env in project root
+
+# If .env is in backend/.env and BASE_DIR is backend/
+BASE_DIR_FOR_ENV = Path(__file__).resolve().parent.parent # Should resolve to backend/
+env_path = BASE_DIR_FOR_ENV / '.env' # Correct path if .env is in backend/
+
+print(f"DEBUG settings.py: Attempting to load .env from: {env_path}")
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"DEBUG settings.py: .env loaded successfully from {env_path}.")
+    # Verify a key AWS variable (REMOVE THIS PRINT AFTER VERIFICATION)
+    print(f"DEBUG settings.py: AWS_STORAGE_BUCKET_NAME from env = {os.getenv('AWS_STORAGE_BUCKET_NAME')}")
+else:
+    print(f"DEBUG settings.py: .env file not found at {env_path}. Ensure it exists there.")
+# --- End .env file loading ---
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent # This should resolve to backend/
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

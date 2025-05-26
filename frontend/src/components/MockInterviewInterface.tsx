@@ -23,6 +23,7 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isAnswerPaused, setIsAnswerPaused] = useState<boolean>(false);
   const [audioBlobs, setAudioBlobs] = useState<Blob[]>([]);
+  const audioBlobsRef = useRef<Blob[]>([]);
   const [isReadingQuestion, setIsReadingQuestion] = useState<boolean>(false);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -50,21 +51,38 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
 
   const requestMicrophonePermission = useCallback(async () => {
     setPermissionError(null);
+
+    // Check if the current stream is active and its tracks are live
     if (mediaStreamRef.current) {
-      setIsMicrophoneReady(true);
-      return true;
+      const tracks = mediaStreamRef.current.getTracks();
+      const isStreamActive = mediaStreamRef.current.active;
+      const areTracksLive = tracks.length > 0 && tracks.every(track => track.readyState === 'live');
+
+      if (isStreamActive && areTracksLive) {
+        console.log("Microphone stream is already active and tracks are live.");
+        setIsMicrophoneReady(true);
+        return true;
+      } else {
+        console.warn("Existing microphone stream is inactive or tracks ended. Attempting to re-acquire.");
+        // Stop all tracks on the existing inactive stream before getting a new one
+        tracks.forEach(track => track.stop());
+        mediaStreamRef.current = null; // Clear the ref to force re-acquisition
+      }
     }
+    
     try {
+      console.log("Requesting new microphone stream...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       setIsMicrophoneReady(true);
-      console.log("Microphone permission granted.");
+      console.log("Microphone permission granted and stream acquired.");
       return true;
     } catch (err) {
       console.error("Error requesting microphone permission:", err);
       setPermissionError("Microphone permission denied. Please enable it in your browser settings to record audio.");
       toast({ title: "Microphone Access Denied", description: "Please enable microphone access in your browser settings.", variant: "destructive" });
       setIsMicrophoneReady(false);
+      mediaStreamRef.current = null; // Ensure ref is null on error
       return false;
     }
   }, [toast]);
@@ -74,30 +92,59 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
       console.log("Already recording. Call to startAnswerRecording ignored.");
       return;
     }
-    if (!isMicrophoneReady) {
-      const permissionGranted = await requestMicrophonePermission();
-      if (!permissionGranted) return;
-    }
-    if (!mediaStreamRef.current) {
-      toast({ title: "Error", description: "Microphone stream not available.", variant: "destructive" });
+
+    // Always ensure microphone is ready and stream is active before starting
+    const permissionGranted = await requestMicrophonePermission();
+    if (!permissionGranted || !mediaStreamRef.current || !mediaStreamRef.current.active) {
+      toast({ title: "Error", description: "Microphone not ready or stream inactive.", variant: "destructive" });
       return;
     }
-
+    
     try {
-      mediaRecorderRef.current = new MediaRecorder(mediaStreamRef.current);
+      console.log("MediaStream for MediaRecorder:", mediaStreamRef.current);
+      if (mediaStreamRef.current) {
+        console.log("MediaStream tracks:", mediaStreamRef.current.getTracks());
+        mediaStreamRef.current.getTracks().forEach(track => {
+          console.log(`Track readyState: ${track.readyState}, muted: ${track.muted}, enabled: ${track.enabled}`);
+        });
+      }
+      // MODIFIED: Added mimeType option for WAV
+      const mediaRecorderOptions = { mimeType: 'audio/wav' };
+      try {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/wav')) {
+          console.log("Attempting to use mimeType: audio/wav");
+          mediaRecorderRef.current = new MediaRecorder(mediaStreamRef.current, mediaRecorderOptions);
+        } else if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
+          console.log("audio/wav not supported, attempting audio/webm;codecs=pcm");
+          mediaRecorderRef.current = new MediaRecorder(mediaStreamRef.current, { mimeType: 'audio/webm;codecs=pcm' });
+        } else {
+          console.warn("audio/wav and audio/webm;codecs=pcm not supported by MediaRecorder. Falling back to default (likely webm/opus).");
+          mediaRecorderRef.current = new MediaRecorder(mediaStreamRef.current);
+        }
+      } catch (e) {
+         console.warn("Error checking MediaRecorder supported types or instantiating with specific WAV/PCM mimetype, falling back to default:", e);
+         mediaRecorderRef.current = new MediaRecorder(mediaStreamRef.current);
+      }
+      // END MODIFICATION
+
       const newAudioBlobs: Blob[] = []; // Temporary array for current recording segment
       mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log(`[MediaRecorder] ondataavailable - event.data.size: ${event.data.size}`);
         if (event.data.size > 0) {
           newAudioBlobs.push(event.data);
+          console.log(`[MediaRecorder] Pushed blob of size ${event.data.size}. newAudioBlobs count: ${newAudioBlobs.length}`);
         }
       };
       mediaRecorderRef.current.onstop = () => {
         console.log("Recording stopped for an answer segment.");
-        // Combine all collected blobs for this segment into a single Blob
         if (newAudioBlobs.length > 0) {
-          const completeAnswerBlob = new Blob(newAudioBlobs, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' });
-          setAudioBlobs((prevBlobs) => [...prevBlobs, completeAnswerBlob]);
-          // Clear newAudioBlobs for the next recording segment
+          // MODIFIED: Use the recorder's mimeType, default to 'audio/wav' as a fallback for the blob.
+          const blobMimeType = mediaRecorderRef.current?.mimeType || 'audio/wav';
+          const completeAnswerBlob = new Blob(newAudioBlobs, { type: blobMimeType });
+          // Update both ref and state
+          audioBlobsRef.current = [...audioBlobsRef.current, completeAnswerBlob];
+          setAudioBlobs(audioBlobsRef.current);
+          console.log(`[MediaRecorder] Added complete answer blob. Ref count: ${audioBlobsRef.current.length}`);
           newAudioBlobs.length = 0; 
         }
       };
@@ -109,7 +156,7 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
       console.error("Error starting MediaRecorder:", error);
       toast({ title: "Recording Error", description: "Could not start audio recording.", variant: "destructive" });
     }
-  }, [isRecording, isMicrophoneReady, requestMicrophonePermission, toast]);
+  }, [isRecording, requestMicrophonePermission, toast]);
 
   // Effect to keep startAnswerRecordingRef.current up-to-date
   useEffect(() => {
@@ -156,18 +203,28 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
       audioPlayerRef.current.onended = async () => {
         setIsReadingQuestion(false);
         URL.revokeObjectURL(url);
+        if (isSubmitting) {
+          console.log("Interview submission in progress, skipping startAnswerRecording from TTS.onended");
+          return;
+        }
         console.log("Finished speaking, attempting to start recording.");
-        // await startAnswerRecording();
         startAnswerRecordingRef.current && startAnswerRecordingRef.current();
       };
       audioPlayerRef.current.onerror = async (e) => {
         console.error("Error playing TTS audio:", e);
         setIsReadingQuestion(false);
         URL.revokeObjectURL(url);
-        toast({ title: "TTS Playback Error", description: "Could not play the question audio.", variant: "destructive" });
-        // Still attempt to start recording even if TTS fails to play, so user can answer
+        // Don't show toast if submission is already in progress, as it might be a cleanup-related error
+        if (!isSubmitting) {
+            toast({ title: "TTS Playback Error", description: "Could not play the question audio.", variant: "destructive" });
+        }
+        
+        // Still attempt to start recording even if TTS fails to play, so user can answer, but not if submitting
+        if (isSubmitting) {
+          console.log("Interview submission in progress, skipping startAnswerRecording from TTS.onerror");
+          return;
+        }
         if (isMicrophoneReady || await requestMicrophonePermission()) {
-            // await startAnswerRecording();
             startAnswerRecordingRef.current && startAnswerRecordingRef.current();
         }
       };
@@ -187,14 +244,21 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
       } else if (error.response?.data?.error) {
         errorMsg = error.response.data.error;
       }
-      toast({ title: "TTS Request Error", description: errorMsg, variant: "destructive" });
-      // Attempt to start recording even if TTS fetch fails
+      // Don't show toast if submission is already in progress
+      if (!isSubmitting) {
+        toast({ title: "TTS Request Error", description: errorMsg, variant: "destructive" });
+      }
+      
+      // Attempt to start recording even if TTS fetch fails, but not if submitting
+       if (isSubmitting) {
+          console.log("Interview submission in progress, skipping startAnswerRecording from TTS.catch");
+          return;
+       }
        if (isMicrophoneReady || await requestMicrophonePermission()) {
-            // await startAnswerRecording();
             startAnswerRecordingRef.current && startAnswerRecordingRef.current();
         }
     }
-  }, [requestMicrophonePermission, isMicrophoneReady, toast]);
+  }, [requestMicrophonePermission, isMicrophoneReady, toast, isSubmitting]);
 
   // Speak first question when component mounts and questions are available
   useEffect(() => {
@@ -262,74 +326,109 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   const handleEndInterviewAndRecording = async () => {
     console.log("Attempting to end interview and process recordings.");
     setIsSubmitting(true);
+    toast({ title: "Submitting Interview...", description: "Please wait while your interview data is being uploaded." });
 
-    // Stop any ongoing recording or TTS
+    // Stop any ongoing recording
     if (isRecording) {
       stopAnswerRecording(); // This will trigger onstop which adds the last blob
     }
-    if (audioPlayerRef.current && !audioPlayerRef.current.paused) {
+
+    // Robustly clean up the audio player
+    if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
-      audioPlayerRef.current.src = ""; 
+      const currentSrc = audioPlayerRef.current.src; // Get current src before clearing/nullifying
+      // Detach handlers first to prevent them from firing due to src change or other cleanup actions
       audioPlayerRef.current.onended = null;
       audioPlayerRef.current.onerror = null;
+      audioPlayerRef.current.src = ""; // Clear the source
+      if (currentSrc && currentSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(currentSrc); // Revoke the specific URL that was actually loaded
+      }
     }
     setIsReadingQuestion(false);
 
     // Wait a brief moment to ensure the last blob is processed by onstop if recording was active
-    await new Promise(resolve => setTimeout(resolve, 500)); 
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Log current audioBlobs state just before processing
-    console.log("Final audioBlobs for submission:", audioBlobs);
+    console.log("Final audioBlobs for submission (from ref):", audioBlobsRef.current);
 
-    if (audioBlobs.length > 0) {
+    if (audioBlobsRef.current.length > 0) {
       const formData = new FormData();
       const interviewName = `Mock Interview - ${new Date().toLocaleString()}`;
       formData.append('name', interviewName);
 
       // Append each answer audio blob as a separate file
-      audioBlobs.forEach((blob, index) => {
-        formData.append(`answer_audio_${index}`, blob, `answer_${index}.webm`);
-        console.log(`Appended answer_audio_${index} with size: ${blob.size}`);
+      audioBlobsRef.current.forEach((blob, index) => {
+        // MODIFIED: Changed file extension to .wav
+        const filename = mediaRecorderRef.current?.mimeType.includes('pcm') || mediaRecorderRef.current?.mimeType.includes('wav') ? `answer_${index}.wav` : `answer_${index}.webm`;
+        formData.append(`answer_audio_${index}`, blob, filename);
+        console.log(`Appended ${filename} with size: ${blob.size} and type: ${blob.type}`);
       });
 
+      console.log(`Current question index before slicing: ${currentQuestionIndex}`);
       const questionsAnswered = questions.slice(0, currentQuestionIndex + 1);
       formData.append('questions_used', JSON.stringify(questionsAnswered));
       console.log("Questions used for submission:", questionsAnswered);
 
       try {
         console.log("Submitting interview data to backend...");
-        const response = await apiClient.post('/api/interviews/', formData, {
+        const response = await apiClient.post('interviews/', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         });
-        console.log("Interview submission response:", response);
-        toast({ title: "Interview Submitted!", description: "Your mock interview has been successfully submitted for processing.", variant: "default" });
-        onEndInterview(); // Call the prop to navigate away or reset UI
+
+        if (response.status === 201) {
+          toast({ title: "Success!", description: "Interview submitted successfully." });
+          setAudioBlobs([]); // Clear state
+          audioBlobsRef.current = []; // Clear ref
+          onEndInterview(); 
+        } else {
+          toast({ 
+            title: "Submission Error", 
+            description: `Failed to submit interview. Server responded with ${response.status}.`,
+            variant: "destructive" 
+          });
+        }
       } catch (error: any) {
         console.error("Error submitting interview:", error);
-        let errorMsg = "An unexpected error occurred.";
+        let errorDescription = "An unknown error occurred during submission.";
         if (error.response && error.response.data) {
+          // Try to get a more specific error message if available
+          // This depends on how your backend formats error responses
           if (typeof error.response.data === 'string') {
-            errorMsg = error.response.data;
-          } else if (typeof error.response.data === 'object') {
-            // Try to extract a meaningful message from a JSON response
-            errorMsg = Object.values(error.response.data).flat().join(' ');
-            if (!errorMsg) {
+            errorDescription = error.response.data;
+          } else if (typeof error.response.data.detail === 'string') {
+            errorDescription = error.response.data.detail;
+          } else if (error.response.data.error) {
+              errorDescription = typeof error.response.data.error === 'string' ? error.response.data.error : JSON.stringify(error.response.data.error);
+          } else {
               try {
-                errorMsg = JSON.stringify(error.response.data);
-              } catch (e) { /* ignore stringify error */ }
-            }
+                  errorDescription = JSON.stringify(error.response.data);
+              } catch (e) {
+                  // if error.response.data is not stringifiable, use a generic message
+                  errorDescription = "Could not parse error response from server.";
+              }
           }
+        } else if (error.message) {
+          errorDescription = error.message;
         }
-        toast({ title: "Submission Error", description: `Failed to submit interview: ${errorMsg}`, variant: "destructive" });
+        toast({ 
+          title: "Submission Failed", 
+          description: errorDescription,
+          variant: "destructive" 
+        });
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
-      console.log("No audio blobs recorded, ending interview without submission.");
+      console.log("No audio blobs recorded (from ref), ending interview without submission.");
       toast({ title: "Interview Ended", description: "No audio was recorded to submit.", variant: "default" });
-      onEndInterview(); // Still call onEndInterview if nothing to submit
+      setAudioBlobs([]); // Clear state even if nothing to submit
+      audioBlobsRef.current = []; // Clear ref even if nothing to submit
+      onEndInterview(); 
     }
-    setIsSubmitting(false);
   };
 
   return (
