@@ -22,7 +22,8 @@ class DeepgramTranscriptionService:
                 punctuate=kwargs.get('punctuate', True),
                 utterances=kwargs.get('utterances', True),
                 diarize=kwargs.get('diarize', True),
-                encoding=kwargs.get('encoding')
+                sample_rate=kwargs.get('sample_rate'),
+                channels=kwargs.get('channels')
             )
             
             source: UrlSource = {"url": audio_url}

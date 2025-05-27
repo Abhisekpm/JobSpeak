@@ -77,12 +77,13 @@ def process_transcription_task(conversation_id):
         # -------------------------------------------
 
         deepgram_options = {
-            'model': 'nova-2',
+            'model': 'nova-2', 
             'language': 'en-US',
-            'punctuate': True,
-            'diarize': True,
-            'utterances': True,
-            'smart_format': True,
+            'punctuate': False, 
+            'diarize': False, 
+            'utterances': False, 
+            'smart_format': False, 
+            'channels': 1                # Keep channels
         }
 
         service = DeepgramTranscriptionService()
@@ -527,7 +528,7 @@ def process_interview_transcription_task(interview_id):
             'diarize': False, 
             'utterances': False, 
             'smart_format': False, 
-            'encoding': 'opus', # RE-ADDED for WEBM files
+            'channels': 1                # Keep channels
         }
         num_answers_to_process = len(s3_keys)
 
@@ -563,19 +564,24 @@ def process_interview_transcription_task(interview_id):
                     interleaved_qa_parts.append(f"Answer {index + 1}: {answer_text_for_interleaving}")
                     continue # Skip to the next S3 key
 
-                task_logger.info(f"[DEEPGRAM_CALL] Using Audio URL: {audio_url}") # ADD THIS LOG
+                # task_logger.info(f"[DEEPGRAM_CALL] Using Audio URL: {audio_url}") # REMOVE THIS LOG
                 structured_result = service.get_full_transcript(audio_url=audio_url, **deepgram_options)
                 
-                if structured_result and isinstance(structured_result, dict):
-                    current_answer_transcript_json = structured_result
+                if structured_result and isinstance(structured_result, list):
+                    current_answer_transcript_json = {"segments": structured_result}
                     try:
-                        ans_text = structured_result['results']['channels'][0]['alternatives'][0]['transcript']
-                        answer_text_for_interleaving = ans_text if ans_text.strip() else "[Transcribed text was empty]"
+                        # Extract text from segments list
+                        if structured_result:
+                            ans_text = " ".join([segment.get('transcript', '') for segment in structured_result])
+                            answer_text_for_interleaving = ans_text.strip() if ans_text.strip() else "[Transcribed text was empty]"
+                        else:
+                            answer_text_for_interleaving = "[No transcript segments found]"
                     except (KeyError, IndexError, TypeError) as extract_err:
-                        task_logger.warning(f"Could not extract plain text from Deepgram for answer {index + 1}: {extract_err}")
-                        answer_text_for_interleaving = "[Could not extract transcript text from result structure]"
+                        task_logger.warning(f"Could not extract plain text from segments for answer {index + 1}: {extract_err}")
+                        answer_text_for_interleaving = "[Could not extract transcript text from segments]"
                 else:
                     task_logger.warning(f"Deepgram returned no or invalid result for answer {index + 1}.")
+                    current_answer_transcript_json = {"error": "No valid transcription result received"}
             except Exception as e:
                 task_logger.error(f"Error transcribing answer {index + 1} (S3 key: {s3_key}): {e}", exc_info=True)
             
