@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 import {
   Card,
   CardHeader,
@@ -25,13 +26,14 @@ export interface Interview {
 
 interface InterviewCardProps {
   interview: Interview;
-  onClick?: (id: string) => void;
+  // onClick?: (id: string) => void; // Remove onClick prop
 }
 
 const InterviewCard: React.FC<InterviewCardProps> = ({
   interview,
-  onClick,
+  // onClick, // onClick prop is no longer used
 }) => {
+  const navigate = useNavigate(); // Initialize useNavigate
   const { id, name, created_at, questions_used } = interview;
 
   const formattedDate = created_at ? format(new Date(created_at), "PPP") : "N/A";
@@ -85,9 +87,10 @@ const InterviewCard: React.FC<InterviewCardProps> = ({
   }
 
   const handleCardClick = () => {
-    if (onClick) {
-      onClick(id);
-    }
+    // if (onClick) { // Old navigation via prop
+    //   onClick(id);
+    // }
+    navigate(`/interviews/${id}`); // New navigation
   };
 
   return (

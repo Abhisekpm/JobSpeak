@@ -5,10 +5,11 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/Layout';
-import Home from './components/home';
+import Home from './components/Home';
 import ConversationDetail from './components/ConversationDetail';
 import SettingsPage from './pages/SettingsPage';
 import MockInterviewPage from './pages/MockInterviewPage';
+import InterviewDetail from "./components/InterviewDetail";
 
 const AppRoutes: React.FC = () => {
   return (
@@ -26,6 +27,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/conversations/:id" element={<ConversationDetail />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/mock-interview" element={<MockInterviewPage />} />
+            <Route path="/interviews/:id" element={<InterviewDetail />} />
           </Route>
         </Route>
         

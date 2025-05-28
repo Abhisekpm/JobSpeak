@@ -84,26 +84,29 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
     // For now, the useEffect dependency on isInterviewActive will handle re-fetching.
   };
 
-  const handleInterviewCardClick = (interviewId: string) => {
-    // TODO: Navigate to Interview Detail Page
-    console.log(`Navigate to interview detail page for ID: ${interviewId}`);
-    toast({ title: "Navigation", description: `Would navigate to details for interview ${interviewId}. Not yet implemented.` });
-  };
+  // This handler is no longer needed as InterviewCard handles its own navigation
+  // const handleInterviewCardClick = (interviewId: string) => {
+  //   console.log(`Navigate to interview detail page for ID: ${interviewId}`);
+  //   toast({ title: "Navigation", description: `Would navigate to details for interview ${interviewId}. Not yet implemented.` });
+  // };
 
   if (isInterviewActive) {
     return <MockInterviewInterface onEndInterview={handleEndInterview} questions={activeInterviewQuestions} />;
   }
 
   return (
-    <div className="flex flex-col items-center justify-start flex-grow py-10 px-4 md:px-8">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-800">Mock Interviews</h2>
-      <p className="text-gray-600 mb-8 max-w-lg text-center">
-        Practice with AI to ace your next job interview. Upload your resume and the job description, or use your saved profile, to begin a tailored mock interview session.
-      </p>
+    <>
+      {/* Styled Introductory Blurb */}
+      <div className="mb-8 p-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg shadow-lg">
+        <h2 className="text-3xl font-bold mb-3">Mock Interviews</h2>
+        <p className="text-lg">
+          Practice with AI to ace your next job interview. Upload your resume and the job description, or use your saved profile, to begin a tailored mock interview session.
+        </p>
+      </div>
 
       {/* Past Interviews Section */}
-      <div className="w-full max-w-4xl mt-8">
-        <h3 className="text-xl font-semibold mb-4 text-gray-700">Your Past Interviews</h3>
+      <div>
+        <h3 className="text-xl font-semibold mb-6 text-gray-700">Your Past Interviews</h3>
         {isLoadingInterviews ? (
           <div className="flex justify-center items-center h-32">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -114,25 +117,25 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
               <InterviewCard 
                 key={interview.id} 
                 interview={interview} 
-                onClick={() => handleInterviewCardClick(interview.id)}
+                // onClick prop removed as InterviewCard handles navigation
               />
             ))}
           </div>
         ) : (
           <p className="text-gray-500 text-center py-6">
-            You haven't completed any mock interviews yet. Click "Practice" to start your first one!
+            You haven't completed any mock interviews yet. Click "Practice Interview" below to start your first one!
           </p>
         )}
       </div>
 
       <FloatingActionButton
         onFabClick={isLoadingProfile ? () => {} : handlePracticeClick}
-        className={isLoadingProfile ? "opacity-50 cursor-not-allowed" : ""}
+        className={`fixed bottom-8 right-8 ${isLoadingProfile ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         {isLoadingProfile ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : null}
-        Practice Interview
+        Practice
       </FloatingActionButton>
 
       <MockInterviewSetupModal
@@ -142,7 +145,7 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
         initialResumeUrl={profileResumeUrl}
         initialJdUrl={profileJdUrl}
       />
-    </div>
+    </>
   );
 };
 

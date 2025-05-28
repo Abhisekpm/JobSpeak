@@ -1,5 +1,5 @@
 import React from 'react';
-import { Conversation, FilterOptions } from './home'; // Corrected import casing to lowercase 'home'
+import { Conversation, FilterOptions } from './Home'; // Corrected import casing to uppercase 'Home'
 import SearchFilter from './SearchFilter';
 import ConversationCard from './ConversationCard';
 import FloatingActionButton from './FloatingActionButton';
@@ -54,14 +54,24 @@ const CareerConversationsView: React.FC<CareerConversationsViewProps> = ({
 
   return (
     <>
+      {/* Introductory Blurb */}
+      <div className="mb-8 p-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg shadow-lg">
+        <h2 className="text-3xl font-bold mb-3">Career Conversations</h2>
+        <p className="text-lg">
+          Record your career conversations, networking calls, important discussions, or any audio you want to analyze. 
+          Get transcripts, summaries, and coaching to improve your communication and recall key details.
+        </p>
+      </div>
+
       <SearchFilter
         onSearchChange={handleSearchChange}
-        onFilter={handleFilterChange} // Make sure SearchFilter component uses 'onFilter' prop
+        onFilter={handleFilterChange}
       />
       {/* Removed searchTerm and activeFilters from props list as SearchFilter uses handlers */}
       {conversations.length === 0 && !isLoading ? (
         <div className="text-center py-10">
           <p className="text-gray-500">No conversations recorded yet.</p>
+          <p className="text-sm text-gray-400 mt-2">Click the button below to record your first conversation.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 mt-8">

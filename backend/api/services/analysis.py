@@ -128,8 +128,33 @@ Example JSON Output:
             logging.info("Successfully received and parsed analysis from Gemini.")
             return analysis_result
         except json.JSONDecodeError as json_err:
-            logging.error(f"Failed to parse JSON response from Gemini analysis. Error: {json_err}. Response text: {response_text}")
-            return None
+            logging.warning(f"Initial JSON parsing failed: {json_err}. Response text: {response_text}")
+            # Attempt to fix common issue: trailing comma before object/array end
+            if "trailing comma" in str(json_err).lower():
+                # Remove trailing commas before '}' or ']'
+                import re
+                # Regex to find comma before '}' or ']' possibly with whitespace
+                cleaned_response_text = re.sub(r",\\s*([}\\]])", r'\\1', response_text)
+                try:
+                    logging.info(f"Attempting to parse cleaned JSON (removed trailing commas): {cleaned_response_text}")
+                    analysis_result = json.loads(cleaned_response_text)
+                    # Re-validate structure after cleaning
+                    if not all(k in analysis_result for k in ["talk_time_ratio", "sentiment", "topics"]):
+                         logging.error(f"Cleaned Gemini analysis JSON missing required keys. Original: {response_text}")
+                         return None
+                    if not isinstance(analysis_result["talk_time_ratio"], dict) or \
+                       not isinstance(analysis_result["sentiment"], dict) or \
+                       not isinstance(analysis_result["topics"], list):
+                         logging.error(f"Cleaned Gemini analysis JSON has incorrect types. Original: {response_text}")
+                         return None
+                    logging.info("Successfully parsed cleaned JSON from Gemini.")
+                    return analysis_result
+                except json.JSONDecodeError as inner_json_err:
+                    logging.error(f"Failed to parse even after attempting to remove trailing commas. Error: {inner_json_err}. Original text: {response_text}")
+                    return None
+            else: # If it's not a trailing comma error, log it as a more general failure
+                logging.error(f"Failed to parse JSON response from Gemini analysis. Error: {json_err}. Response text: {response_text}")
+                return None
 
     except google_exceptions.GoogleAPIError as e:
         logging.error(f"Gemini API error during analysis: {e}")

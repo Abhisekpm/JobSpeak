@@ -592,20 +592,29 @@ class InterviewViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         # Delete associated S3 files for answer audios
         if instance.answer_audio_s3_keys:
-            for s3_key in instance.answer_audio_s3_keys:
-                try:
-                    # Ensure the key used for deletion matches the creation path
-                    # Assuming the keys stored in answer_audio_s3_keys are already correct
-                    # and now include the user_id and interview_id structure.
-                    # If they were stored with the old path, this would need migration
-                    # or a check, but new uploads will use the new path structure.
-                    if default_storage.exists(s3_key):
-                        default_storage.delete(s3_key)
-                        print(f"Deleted S3 object: {s3_key}")
-                    else:
-                        print(f"S3 object not found for deletion: {s3_key}")
-                except Exception as e:
-                    print(f"Error deleting S3 object {s3_key}: {e}")
+            try:
+                s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                    region_name=settings.AWS_S3_REGION_NAME
+                )
+                for s3_key in instance.answer_audio_s3_keys: # These keys already include AWS_LOCATION if saved that way
+                    try:
+                        # Check if object exists using head_object
+                        s3_client.head_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=s3_key)
+                        # If head_object does not raise an error, the object exists, so delete it
+                        s3_client.delete_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=s3_key)
+                        task_logger.info(f"Successfully deleted S3 object: {s3_key}") # Use task_logger
+                    except ClientError as e:
+                        if e.response['Error']['Code'] == '404':
+                            task_logger.warning(f"S3 object not found for deletion (boto3 head_object check): {s3_key}")
+                        else:
+                            task_logger.error(f"ClientError during S3 object deletion ({s3_key}): {e}")
+                    except Exception as e: # Catch other potential errors during S3 operations
+                        task_logger.error(f"Unexpected error deleting S3 object {s3_key}: {e}")
+            except Exception as e:
+                task_logger.error(f"Failed to initialize S3 client for deletion: {e}")
         
         # Delete the interview instance itself
         instance.delete()
