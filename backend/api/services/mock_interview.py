@@ -15,6 +15,9 @@ from django.core.files.base import File # For type hinting on file_field object
 # from storages.backends.s3boto3 import S3Boto3Storage # No longer needed
 from django.conf import settings
 from typing import List
+from bs4 import BeautifulSoup # For HTML parsing
+import re # For text cleaning
+from urllib.parse import urlparse # For URL validation
 
 # Configure the Gemini API key
 # It's best practice to load this from environment variables
@@ -118,6 +121,169 @@ def extract_text_from_docx(file_content: bytes) -> str:
     except Exception as e:
         print(f"Error extracting text from DOCX bytes: {e}")
         raise ValueError(f"Failed to process DOCX content: {e}") from e
+
+def extract_text_from_url(url: str) -> str:
+    """
+    Extracts text content from a job posting URL.
+    
+    Args:
+        url (str): The URL to extract text from
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        ValueError: If URL is invalid, unreachable, or content cannot be extracted
+    """
+    if not url or not url.strip():
+        raise ValueError("URL cannot be empty")
+    
+    url = url.strip()
+    
+    # Validate URL format
+    try:
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise ValueError("Invalid URL format. Please include http:// or https://")
+    except Exception as e:
+        raise ValueError(f"Invalid URL format: {e}") from e
+    
+    # Set up request headers to mimic a real browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
+    
+    print(f"Attempting to extract text from URL: {url}")
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+        response.raise_for_status()
+        
+        # Check if content type is HTML
+        content_type = response.headers.get('content-type', '').lower()
+        if 'html' not in content_type and 'text' not in content_type:
+            raise ValueError(f"URL does not contain readable text content. Content type: {content_type}")
+        
+        print(f"Successfully fetched content from {url} (status: {response.status_code})")
+        
+        # Parse HTML content
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style", "nav", "header", "footer"]):
+            script.decompose()
+        
+        # Try to find job description specific content areas
+        job_content = None
+        
+        # Common selectors for job posting content
+        job_selectors = [
+            '[class*="job-description"]',
+            '[class*="job-details"]', 
+            '[class*="description"]',
+            '[id*="job-description"]',
+            '[id*="description"]',
+            'main',
+            '[role="main"]',
+            '.content',
+            '#content'
+        ]
+        
+        for selector in job_selectors:
+            elements = soup.select(selector)
+            if elements:
+                job_content = elements[0]
+                print(f"Found job content using selector: {selector}")
+                break
+        
+        # If no specific job content found, use the body
+        if not job_content:
+            job_content = soup.find('body')
+            if not job_content:
+                job_content = soup
+        
+        # Extract text
+        text = job_content.get_text(separator='\n', strip=True)
+        
+        # Clean up the text
+        text = _clean_extracted_text(text)
+        
+        if not text or len(text.strip()) < 50:
+            raise ValueError("Insufficient text content extracted from URL. The page may not contain a readable job description.")
+        
+        print(f"Successfully extracted text from URL (length: {len(text)} characters)")
+        return text
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching content from URL '{url}': {e}")
+        
+        if isinstance(e, requests.exceptions.HTTPError):
+            status_code = e.response.status_code if e.response else "unknown"
+            if status_code == 404:
+                error_msg = "Job posting not found (404). The URL may be expired or incorrect."
+            elif status_code == 403:
+                error_msg = "Access denied (403). The website may be blocking automated access."
+            elif status_code >= 500:
+                error_msg = f"Website server error ({status_code}). Please try again later."
+            else:
+                error_msg = f"HTTP error {status_code} when accessing the URL."
+        elif isinstance(e, requests.exceptions.Timeout):
+            error_msg = "Request timed out. The website may be slow or unreachable."
+        elif isinstance(e, requests.exceptions.ConnectionError):
+            error_msg = "Could not connect to the website. Please check the URL and your internet connection."
+        else:
+            error_msg = f"Network error: {e}"
+            
+        raise ValueError(error_msg) from e
+        
+    except Exception as e:
+        print(f"Unexpected error processing URL '{url}': {e}")
+        raise ValueError(f"Failed to extract text from URL: {e}") from e
+
+def _clean_extracted_text(text: str) -> str:
+    """
+    Clean and normalize extracted text content.
+    
+    Args:
+        text (str): Raw extracted text
+        
+    Returns:
+        str: Cleaned text
+    """
+    if not text:
+        return ""
+    
+    # Replace multiple whitespace/newlines with single spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove common unwanted patterns
+    unwanted_patterns = [
+        r'cookie\s+policy',
+        r'privacy\s+policy', 
+        r'terms\s+of\s+service',
+        r'sign\s+up\s+for\s+job\s+alerts',
+        r'apply\s+now',
+        r'share\s+this\s+job',
+        r'save\s+job',
+        r'report\s+job',
+        r'\b(home|about|careers|contact|help|faq)\b',
+        r'follow\s+us\s+on',
+        r'social\s+media',
+        r'\blinkedin\b|\btwitter\b|\bfacebook\b'
+    ]
+    
+    for pattern in unwanted_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # Remove extra spaces and normalize
+    text = ' '.join(text.split())
+    
+    return text.strip()
 
 # --- Mock Interview Question Generation ---
 

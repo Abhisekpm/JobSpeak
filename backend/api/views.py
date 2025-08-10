@@ -20,7 +20,7 @@ import boto3
 from botocore.exceptions import ClientError
 import os
 import traceback
-from .services.mock_interview import extract_text_from_file, generate_mock_questions
+from .services.mock_interview import extract_text_from_file, generate_mock_questions, extract_text_from_url
 
 # Imports for Deepgram TTS
 from django.http import StreamingHttpResponse
@@ -417,13 +417,33 @@ class GetMockInterviewQuestionsView(APIView):
     """
     API endpoint to generate mock interview questions based on the
     authenticated user's uploaded resume and job description.
-    Requires both files to be present.
+    
+    GET: Uses files from user's profile (existing functionality)
+    POST: Accepts optional jd_url parameter to use URL instead of stored JD file
+    
     Saves generated questions to the user's profile.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        """GET request - use existing files from profile"""
+        return self._generate_questions_from_profile(request.user)
+
+    def post(self, request, *args, **kwargs):
+        """POST request - supports jd_url parameter"""
         user = request.user
+        jd_url = request.data.get('jd_url', '').strip()
+        
+        print(f"[POST_REQUEST] User {user.id} requesting questions with jd_url: {jd_url}")
+        
+        if jd_url:
+            return self._generate_questions_with_url(user, jd_url)
+        else:
+            # No URL provided, fall back to profile files
+            return self._generate_questions_from_profile(user)
+
+    def _generate_questions_from_profile(self, user):
+        """Generate questions using files from user's profile"""
         try:
             profile = UserProfile.objects.get(user=user)
         except UserProfile.DoesNotExist:
@@ -435,61 +455,90 @@ class GetMockInterviewQuestionsView(APIView):
         try:
             resume_text = extract_text_from_file(profile.resume)
             jd_text = extract_text_from_file(profile.job_description)
-        except ValueError as e: # Catch errors from text extraction (file not found on S3, processing error)
+        except ValueError as e:
             print(f"Error extracting text for user {user.id}: {e}")
-            # Provide a more specific error message if possible based on the exception
             error_message = str(e)
             if "not found at the specified URL" in error_message or "Could not retrieve file" in error_message:
-                 return Response({"error": f"Failed to process files: {error_message}. Please try re-uploading."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": f"Failed to process files: {error_message}. Please try re-uploading."}, status=status.HTTP_400_BAD_REQUEST)
             return Response({"error": f"Error processing uploaded files: {e}. Please try uploading again or check file formats."}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e: # Catch any other unexpected errors
+        except Exception as e:
             print(f"Unexpected error during text extraction for user {user.id}: {e}")
             traceback.print_exc()
             return Response({"error": "An unexpected error occurred while processing your files."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        if not resume_text or not jd_text:
-            print(f"[VALIDATION_ERROR] For user {user.id}, could not extract text from one or both files.") # Enhanced log
-            return Response({"error": "Could not extract text from one or both files. Ensure they are valid and not empty."}, status=status.HTTP_400_BAD_REQUEST)
+        return self._generate_and_save_questions(user, resume_text, jd_text, save_to_profile=True)
 
-        try: # This try block is now more focused on question generation and saving
+    def _generate_questions_with_url(self, user, jd_url):
+        """Generate questions using URL for JD and profile resume"""
+        try:
+            profile = UserProfile.objects.get(user=user)
+        except UserProfile.DoesNotExist:
+            return Response({"error": "User profile not found. Please upload a resume first."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not profile.resume:
+            return Response({"error": "Missing resume. Please upload a resume to your profile first."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Extract resume text from profile
+            resume_text = extract_text_from_file(profile.resume)
+        except ValueError as e:
+            print(f"Error extracting resume text for user {user.id}: {e}")
+            return Response({"error": f"Error processing resume file: {e}. Please try re-uploading your resume."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Unexpected error during resume extraction for user {user.id}: {e}")
+            traceback.print_exc()
+            return Response({"error": "An unexpected error occurred while processing your resume."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            # Extract JD text from URL
+            print(f"[URL_EXTRACTION] Extracting JD text from URL for user {user.id}: {jd_url}")
+            jd_text = extract_text_from_url(jd_url)
+        except ValueError as e:
+            print(f"Error extracting text from URL for user {user.id}: {e}")
+            return Response({"error": f"Error processing job posting URL: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Unexpected error during URL extraction for user {user.id}: {e}")
+            traceback.print_exc()
+            return Response({"error": "An unexpected error occurred while processing the job posting URL."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Don't save questions to profile when using URL (since JD is not from profile)
+        return self._generate_and_save_questions(user, resume_text, jd_text, save_to_profile=False)
+
+    def _generate_and_save_questions(self, user, resume_text, jd_text, save_to_profile=True):
+        """Generate questions and optionally save to profile"""
+        if not resume_text or not jd_text:
+            print(f"[VALIDATION_ERROR] For user {user.id}, could not extract text from one or both sources.")
+            return Response({"error": "Could not extract text from one or both sources. Ensure they are valid and not empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
             questions = generate_mock_questions(resume_text, jd_text)
-            print(f"[DEBUG] Generated questions for user {user.id}: Type={type(questions)}, Content={questions}")
+            print(f"[DEBUG] Generated questions for user {user.id}: Type={type(questions)}, Count={len(questions) if isinstance(questions, list) else 'N/A'}")
 
             if not isinstance(questions, list):
-                # This check is important. If it's not a list, JSONField might have issues.
-                print(f"[ERROR_TYPE] For user {user.id}, generated questions are not a list as expected: Type={type(questions)}, Content={questions}")
-                # Optionally, convert or handle, or return an error. For now, logging and proceeding.
-                # If this is a common issue, the problem might be in generate_mock_questions service.
-            
-            # Save questions to profile
-            profile.generated_mock_questions = questions
-            try:
-                profile.save(update_fields=['generated_mock_questions'])
-                print(f"[SAVE_ATTEMPT] Attempted profile.save() for generated_mock_questions for user {user.id}.")
+                print(f"[ERROR_TYPE] For user {user.id}, generated questions are not a list as expected: Type={type(questions)}")
 
-                # Verify by re-fetching immediately from DB
-                # This helps confirm if the save operation persisted as expected
-                verified_profile = UserProfile.objects.get(pk=profile.pk) # Fetch by pk for certainty
-                if verified_profile.generated_mock_questions == questions:
-                    print(f"[SAVE_VERIFIED] Questions successfully saved and re-fetched for user {user.id}. DB content: {verified_profile.generated_mock_questions}")
-                else:
-                    # This is a critical log if the save didn't "stick" or changed the data.
-                    print(f"[SAVE_VERIFY_FAILED] Save verification FAILED for user {user.id}. Expected to save: {questions}, but DB has: {verified_profile.generated_mock_questions}")
-            
-            except Exception as save_exception:
-                print(f"[ERROR_DURING_SAVE] Exception during profile.save() or verification for generated_mock_questions for user {user.id}: {save_exception}")
-                traceback.print_exc()
-                # It might be better to return an error to the client if saving fails.
-                # For instance, return Response({"error": "Failed to save generated questions."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                # For now, it will proceed to return the questions if no re-raise, but they wouldn't be persisted.
+            if save_to_profile:
+                # Save questions to profile only when using profile files
+                try:
+                    profile = UserProfile.objects.get(user=user)
+                    profile.generated_mock_questions = questions
+                    profile.save(update_fields=['generated_mock_questions'])
+                    print(f"[SAVE_SUCCESS] Questions saved to profile for user {user.id}")
+                except Exception as save_exception:
+                    print(f"[ERROR_DURING_SAVE] Exception saving questions for user {user.id}: {save_exception}")
+                    traceback.print_exc()
+                    # Continue even if save fails - return the questions anyway
+            else:
+                print(f"[NO_SAVE] Questions not saved to profile (URL-based generation) for user {user.id}")
 
             return Response({"questions": questions})
-        except RuntimeError as e: # Specific error from generate_mock_questions (e.g., Gemini model issue)
-            print(f"[ERROR_RUNTIME_GENERATION] RuntimeError generating questions for user {user.id}: {e}") # Enhanced log
+            
+        except RuntimeError as e:
+            print(f"[ERROR_RUNTIME_GENERATION] RuntimeError generating questions for user {user.id}: {e}")
             traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        except Exception as e: # This is the generic one for question generation or other unexpected issues in this block
-            print(f"[ERROR_UNEXPECTED_GENERATION] Exception generating/processing questions for user {user.id}: {e}") # Enhanced log
+        except Exception as e:
+            print(f"[ERROR_UNEXPECTED_GENERATION] Exception generating questions for user {user.id}: {e}")
             traceback.print_exc()
             return Response({"error": "Failed to generate questions due to an internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

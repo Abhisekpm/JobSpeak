@@ -207,12 +207,32 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
       // The generation will use whatever is on profile.
 
       if (filesWereModifiedInModal || jdUrl.trim()) {
-        // If files were changed, or a JD URL is specified (implying user wants questions for *this specific JD URL context*,
-        // even if file on profile is different, relying on backend to use profile files)
-        // OR if there's simply no other way to get questions (e.g. no initial files)
-        console.log("Files were modified in modal or JD URL provided. Fetching new questions based on current profile state...");
-        const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
-        questionsToUse = response.data.questions;
+        // If files were changed, or a JD URL is specified
+        console.log("Files were modified in modal or JD URL provided. Fetching new questions...");
+        
+        if (jdUrl.trim()) {
+          // Use POST request with JD URL
+          console.log("Using JD URL for question generation:", jdUrl);
+          toast({ 
+            title: "Processing Job Posting", 
+            description: "Extracting job details from the provided URL...", 
+            duration: 3000 
+          });
+          const response = await apiClient.post<{ questions: string[] }>('/mock-interview-questions/', {
+            jd_url: jdUrl.trim()
+          });
+          questionsToUse = response.data.questions;
+          toast({ 
+            title: "Questions Generated", 
+            description: "Successfully generated interview questions from the job posting.", 
+            duration: 2000 
+          });
+        } else {
+          // Files were modified but no URL, use regular GET request
+          console.log("Files were modified, using profile files for question generation");
+          const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+          questionsToUse = response.data.questions;
+        }
       } else {
         // Files were NOT modified in the modal, and no new JD URL was specified.
         // Check profile for existing questions that should correspond to initialResumeUrl and initialJdUrl.
@@ -230,7 +250,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
         } catch (profileError) {
           console.error("Error fetching profile to check for stored questions:", profileError);
           setErrorMessage("Could not check for existing questions. Attempting to generate new questions based on current profile state.");
-          // Fallback to generating new questions
+          // Fallback to generating new questions using GET request (profile files)
           const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
           questionsToUse = response.data.questions;
         }
@@ -246,9 +266,35 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
       }
     } catch (error: any) {
       console.error("Error starting interview from modal:", error);
-      const apiError = error.response?.data?.error || "An error occurred while processing your request.";
-      setErrorMessage(`Failed to start interview: ${apiError}`);
-      toast({ title: "Error Starting Interview", description: apiError, variant: "destructive" });
+      let userFriendlyMessage = "An error occurred while processing your request.";
+      
+      if (error.response?.data?.error) {
+        userFriendlyMessage = error.response.data.error;
+      } else if (error.response?.status === 400 && jdUrl.trim()) {
+        userFriendlyMessage = "There was an issue processing the job posting URL. Please check the URL and try again.";
+      } else if (error.response?.status === 503) {
+        userFriendlyMessage = "The question generation service is temporarily unavailable. Please try again in a moment.";
+      } else if (error.response?.status >= 500) {
+        userFriendlyMessage = "A server error occurred. Please try again later.";
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        userFriendlyMessage = "Network connection error. Please check your internet connection and try again.";
+      }
+      
+      setErrorMessage(`Failed to start interview: ${userFriendlyMessage}`);
+      
+      // Provide specific toast messages based on error type
+      let toastTitle = "Error Starting Interview";
+      if (jdUrl.trim() && error.response?.status === 400) {
+        toastTitle = "URL Processing Error";
+      } else if (error.response?.status === 503) {
+        toastTitle = "Service Temporarily Unavailable";
+      }
+      
+      toast({ 
+        title: toastTitle, 
+        description: userFriendlyMessage, 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -391,7 +437,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
           </Button>
           <Button type="button" onClick={handleActualStartInterview} className="w-full sm:w-auto" disabled={isLoading}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {isLoading ? "Processing..." : "Start Interview"}
+            {isLoading ? (jdUrl.trim() ? "Processing URL..." : "Processing...") : "Start Interview"}
           </Button>
         </DialogFooter>
       </DialogContent>
