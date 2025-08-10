@@ -41,6 +41,7 @@ interface MockInterviewSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStartInterview: (resumeFile: File | null, jdFile: File | null, jdUrl: string, useExistingResume: boolean, useExistingJd: boolean) => void;
+  onInterviewCreated: (interview: any) => void; // Callback for when interview is successfully created
   initialResumeUrl?: string | null;
   initialJdUrl?: string | null;
 }
@@ -49,6 +50,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
   isOpen,
   onClose,
   onStartInterview,
+  onInterviewCreated,
   initialResumeUrl,
   initialJdUrl,
 }) => {
@@ -69,6 +71,7 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedQuestionsList, setGeneratedQuestionsList] = useState<string[]>([]);
   const [isInterviewActive, setIsInterviewActive] = useState(false); // Changed from isInterviewStarting for clarity
+  const [extractedCompanyName, setExtractedCompanyName] = useState<string>("Unknown Company");
 
   useEffect(() => {
     if (initialResumeUrl) {
@@ -218,10 +221,11 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             description: "Extracting job details from the provided URL...", 
             duration: 3000 
           });
-          const response = await apiClient.post<{ questions: string[] }>('/mock-interview-questions/', {
+          const response = await apiClient.post<{ questions: string[]; company_name: string }>('/mock-interview-questions/', {
             jd_url: jdUrl.trim()
           });
           questionsToUse = response.data.questions;
+          setExtractedCompanyName(response.data.company_name || "Unknown Company");
           toast({ 
             title: "Questions Generated", 
             description: "Successfully generated interview questions from the job posting.", 
@@ -230,8 +234,9 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
         } else {
           // Files were modified but no URL, use regular GET request
           console.log("Files were modified, using profile files for question generation");
-          const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+          const response = await apiClient.get<{ questions: string[]; company_name: string }>('/mock-interview-questions/');
           questionsToUse = response.data.questions;
+          setExtractedCompanyName(response.data.company_name || "Unknown Company");
         }
       } else {
         // Files were NOT modified in the modal, and no new JD URL was specified.
@@ -242,17 +247,20 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
           if (profileResponse.data.generated_mock_questions && profileResponse.data.generated_mock_questions.length > 0) {
             console.log("Using stored questions from profile:", profileResponse.data.generated_mock_questions);
             questionsToUse = profileResponse.data.generated_mock_questions;
+            setExtractedCompanyName("Unknown Company"); // No company info for stored questions
           } else {
             console.log("No stored questions found on profile, or they are empty. Will fetch new ones based on current profile state.");
-            const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+            const response = await apiClient.get<{ questions: string[]; company_name: string }>('/mock-interview-questions/');
             questionsToUse = response.data.questions;
+            setExtractedCompanyName(response.data.company_name || "Unknown Company");
           }
         } catch (profileError) {
           console.error("Error fetching profile to check for stored questions:", profileError);
           setErrorMessage("Could not check for existing questions. Attempting to generate new questions based on current profile state.");
           // Fallback to generating new questions using GET request (profile files)
-          const response = await apiClient.get<{ questions: string[] }>('/mock-interview-questions/');
+          const response = await apiClient.get<{ questions: string[]; company_name: string }>('/mock-interview-questions/');
           questionsToUse = response.data.questions;
+          setExtractedCompanyName(response.data.company_name || "Unknown Company");
         }
       }
 
@@ -313,7 +321,8 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
     setIsLoading(false);
     setErrorMessage(null);
     setGeneratedQuestionsList([]);
-    setIsInterviewActive(false); 
+    setIsInterviewActive(false);
+    setExtractedCompanyName("Unknown Company");
     onClose(); // Call the original onClose prop
   }
 
@@ -324,6 +333,8 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
           {/* Optional: Add a header here if needed, or MockInterviewInterface can have its own close button */}
           <MockInterviewInterface
             questions={generatedQuestionsList}
+            companyName={extractedCompanyName}
+            onInterviewCreated={onInterviewCreated}
             onEndInterview={() => {
               // When interview ends from within the interface, reset and close modal
               handleModalClose();
@@ -428,6 +439,16 @@ const MockInterviewSetupModal: React.FC<MockInterviewSetupModalProps> = ({
             disabled={!!jdFile || (useExistingJd && !!initialJdFilename)}
           />
         </div>
+        
+        {/* Show extracted company name if available */}
+        {extractedCompanyName && extractedCompanyName !== "Unknown Company" && (
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3 mt-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
+              <strong>Interview for:</strong> {extractedCompanyName}
+            </p>
+          </div>
+        )}
+        
         {errorMessage && (
           <p className="text-sm text-red-500 text-center mt-2 mb-2 px-2 break-words">{errorMessage}</p>
         )}

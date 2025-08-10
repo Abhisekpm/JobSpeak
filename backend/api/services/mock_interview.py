@@ -285,6 +285,76 @@ def _clean_extracted_text(text: str) -> str:
     
     return text.strip()
 
+# --- Company Name Extraction ---
+
+def extract_company_name(text: str, source_url: str = None) -> str:
+    """
+    Extract company name from job description text using AI.
+    
+    Args:
+        text (str): Job description text
+        source_url (str, optional): Source URL (not used, kept for compatibility)
+        
+    Returns:
+        str: Extracted company name or fallback name
+    """
+    if not text or not text.strip():
+        return "Unknown Company"
+    
+    text = text.strip()
+    
+    # Use AI-powered extraction
+    try:
+        company_from_ai = _extract_company_with_ai(text)
+        if company_from_ai and company_from_ai != "Unknown Company":
+            print(f"Company name extracted with AI: {company_from_ai}")
+            return company_from_ai
+    except Exception as e:
+        print(f"Error extracting company with AI: {e}")
+    
+    # Fallback if AI extraction fails
+    print("Could not extract company name, using fallback")
+    return "Unknown Company"
+
+
+def _extract_company_with_ai(text: str) -> str:
+    """Extract company name using AI (Google Generative AI)."""
+    if not model:
+        return "Unknown Company"
+    
+    # Truncate text if too long (AI models have token limits)
+    if len(text) > 3000:
+        text = text[:3000] + "..."
+    
+    prompt = f"""
+    Extract the company name from this job posting text. Return ONLY the company name in a clean format.
+    
+    Instructions:
+    - Return just the company name (e.g., "Google", "Microsoft", "Apple Inc.")
+    - Do not include words like "LLC" "at", "join", "company", "team", etc.
+    - If you cannot identify a clear company name, return "Unknown Company"
+    
+    Job posting text:
+    {text}
+    
+    Company name:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        if response.text:
+            company_name = response.text.strip()
+            # Clean up the response
+            company_name = re.sub(r'^(company name:?\s*)', '', company_name, flags=re.IGNORECASE)
+            company_name = company_name.strip('"\'.,')
+            
+            if company_name and len(company_name.strip()) > 1 and company_name.lower() != "unknown company":
+                return company_name.strip()
+    
+    except Exception as e:
+        print(f"Error using AI for company extraction: {e}")
+    
+    return "Unknown Company"
+
 # --- Mock Interview Question Generation ---
 
 def generate_mock_questions(resume_text: str, jd_text: str) -> List[str]:

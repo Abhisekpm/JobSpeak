@@ -77,6 +77,16 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
     setIsInterviewActive(true);
   };
 
+  // Handler for when a new interview is successfully created
+  const handleInterviewCreated = (newInterview: Interview) => {
+    console.log("New interview created, adding to list:", newInterview);
+    // Add the newly created interview to the beginning of the list (same pattern as conversations)
+    setPastInterviews((prevInterviews) => [
+      newInterview,
+      ...prevInterviews,
+    ]);
+  };
+
   const handleEndInterview = () => {
     setIsInterviewActive(false);
     setActiveInterviewQuestions([]); // Clear questions
@@ -142,6 +152,7 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
         isOpen={isSetupModalOpen}
         onClose={() => setIsSetupModalOpen(false)}
         onStartInterview={handleStartInterview}
+        onInterviewCreated={handleInterviewCreated}
         initialResumeUrl={profileResumeUrl}
         initialJdUrl={profileJdUrl}
       />

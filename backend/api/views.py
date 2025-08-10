@@ -20,7 +20,7 @@ import boto3
 from botocore.exceptions import ClientError
 import os
 import traceback
-from .services.mock_interview import extract_text_from_file, generate_mock_questions, extract_text_from_url
+from .services.mock_interview import extract_text_from_file, generate_mock_questions, extract_text_from_url, extract_company_name
 
 # Imports for Deepgram TTS
 from django.http import StreamingHttpResponse
@@ -502,20 +502,29 @@ class GetMockInterviewQuestionsView(APIView):
             return Response({"error": "An unexpected error occurred while processing the job posting URL."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Don't save questions to profile when using URL (since JD is not from profile)
-        return self._generate_and_save_questions(user, resume_text, jd_text, save_to_profile=False)
+        return self._generate_and_save_questions(user, resume_text, jd_text, save_to_profile=False, jd_source_url=jd_url)
 
-    def _generate_and_save_questions(self, user, resume_text, jd_text, save_to_profile=True):
-        """Generate questions and optionally save to profile"""
+    def _generate_and_save_questions(self, user, resume_text, jd_text, save_to_profile=True, jd_source_url=None):
+        """Generate questions, extract company name, and optionally save to profile"""
         if not resume_text or not jd_text:
             print(f"[VALIDATION_ERROR] For user {user.id}, could not extract text from one or both sources.")
             return Response({"error": "Could not extract text from one or both sources. Ensure they are valid and not empty."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # Generate questions
             questions = generate_mock_questions(resume_text, jd_text)
             print(f"[DEBUG] Generated questions for user {user.id}: Type={type(questions)}, Count={len(questions) if isinstance(questions, list) else 'N/A'}")
 
             if not isinstance(questions, list):
                 print(f"[ERROR_TYPE] For user {user.id}, generated questions are not a list as expected: Type={type(questions)}")
+
+            # Extract company name from JD
+            try:
+                company_name = extract_company_name(jd_text, jd_source_url)
+                print(f"[COMPANY_EXTRACTION] Extracted company name for user {user.id}: {company_name}")
+            except Exception as e:
+                print(f"[ERROR_COMPANY_EXTRACTION] Error extracting company name for user {user.id}: {e}")
+                company_name = "Unknown Company"
 
             if save_to_profile:
                 # Save questions to profile only when using profile files
@@ -531,7 +540,7 @@ class GetMockInterviewQuestionsView(APIView):
             else:
                 print(f"[NO_SAVE] Questions not saved to profile (URL-based generation) for user {user.id}")
 
-            return Response({"questions": questions})
+            return Response({"questions": questions, "company_name": company_name})
             
         except RuntimeError as e:
             print(f"[ERROR_RUNTIME_GENERATION] RuntimeError generating questions for user {user.id}: {e}")
@@ -568,6 +577,18 @@ class InterviewViewSet(viewsets.ModelViewSet):
         and trigger transcription task.
         """
         user = self.request.user
+        
+        # Check if company name is provided and use it for interview naming
+        company_name = self.request.data.get('company_name', '').strip()
+        if company_name and company_name != "Unknown Company":
+            # Use just the company name (date is already captured in created_at field)
+            interview_name = company_name
+            serializer.validated_data['name'] = interview_name
+            print(f"[INTERVIEW_NAMING] Using company-based name for user {user.id}: {interview_name}")
+        else:
+            # Fallback to timestamp-based naming if no company name
+            print(f"[INTERVIEW_NAMING] Using fallback naming for user {user.id} (company_name: {company_name})")
+        
         instance = serializer.save(user=user)
         
         # Handle multiple answer audio files

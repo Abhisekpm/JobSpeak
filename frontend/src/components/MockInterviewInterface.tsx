@@ -8,6 +8,8 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 interface MockInterviewInterfaceProps {
   onEndInterview: () => void;
   questions: string[];
+  companyName?: string;
+  onInterviewCreated?: (interview: any) => void; // Callback for when interview is successfully created
   initialQuestion?: string;
   onNextQuestion?: () => Promise<string | null>;
 }
@@ -15,6 +17,8 @@ interface MockInterviewInterfaceProps {
 const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   onEndInterview,
   questions,
+  companyName = "Unknown Company",
+  onInterviewCreated,
   initialQuestion,
   // onNextQuestion, // Not currently used
 }) => {
@@ -355,8 +359,19 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
 
     if (audioBlobsRef.current.length > 0) {
       const formData = new FormData();
-      const interviewName = `Mock Interview - ${new Date().toLocaleString()}`;
+      
+      // Use company name for interview naming if available
+      let interviewName: string;
+      if (companyName && companyName !== "Unknown Company") {
+        interviewName = companyName;
+        console.log("Using company-based interview name:", interviewName);
+      } else {
+        interviewName = `Mock Interview - ${new Date().toLocaleString()}`;
+        console.log("Using fallback interview name:", interviewName);
+      }
+      
       formData.append('name', interviewName);
+      formData.append('company_name', companyName);
 
       // Append each answer audio blob as a separate file
       audioBlobsRef.current.forEach((blob, index) => {
@@ -381,6 +396,13 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
 
         if (response.status === 201) {
           toast({ title: "Success!", description: "Interview submitted successfully." });
+          
+          // Call the callback to add the new interview to the list immediately
+          if (onInterviewCreated && response.data) {
+            console.log("Calling onInterviewCreated with new interview:", response.data);
+            onInterviewCreated(response.data);
+          }
+          
           setAudioBlobs([]); // Clear state
           audioBlobsRef.current = []; // Clear ref
           onEndInterview(); 
@@ -434,7 +456,9 @@ const MockInterviewInterface: React.FC<MockInterviewInterfaceProps> = ({
   return (
     <div className="flex flex-col items-center justify-between flex-grow p-4 md:p-6 text-center w-full h-full bg-background">
       <div className="w-full">
-        <h2 className="text-xl md:text-2xl font-semibold mb-3">Mock Interview</h2>
+        <h2 className="text-xl md:text-2xl font-semibold mb-3">
+          {companyName && companyName !== "Unknown Company" ? `${companyName} Interview` : "Mock Interview"}
+        </h2>
         {permissionError && (
             <Alert variant="destructive" className="mb-3 text-xs md:text-sm">
                 <Mic className="h-4 w-4" />
