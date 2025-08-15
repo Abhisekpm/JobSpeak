@@ -23,7 +23,9 @@ const AppRoutes: React.FC = () => {
         {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<Navigate to="/conversations" replace />} />
+            <Route path="/conversations" element={<Home />} />
+            <Route path="/interviews" element={<Home />} />
             <Route path="/conversations/:id" element={<ConversationDetail />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/mock-interview" element={<MockInterviewPage />} />

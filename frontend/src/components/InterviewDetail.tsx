@@ -249,7 +249,7 @@ const InterviewDetail: React.FC = () => {
   };
   
   const handleBack = () => {
-    navigate(-1);
+    navigate('/interviews');
   };
 
   const formatDate = (dateString: string) => {
@@ -274,7 +274,7 @@ const InterviewDetail: React.FC = () => {
         description: `Interview "${interview.name}" has been successfully deleted.`,
         variant: "default",
       });
-      navigate("/home"); // Or navigate to an interview list page
+      navigate("/interviews"); // Navigate back to mock interviews tab
     } catch (err: any) {
       console.error("Error deleting interview:", err);
       toast({

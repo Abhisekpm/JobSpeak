@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import apiClient from "../lib/apiClient"; // Import the API client
 import FloatingActionButton from "./FloatingActionButton";
 import ConversationCard from "./ConversationCard";
@@ -52,8 +52,17 @@ interface UserProfileData { // Define UserProfileData if not already defined glo
 
 const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, user, loading: authLoading } = useAuth(); // Renamed loading to authLoading for clarity
-  const [activeTab, setActiveTab] = useState<string>("conversations"); // Default to conversations tab
+  
+  // Determine active tab from URL path
+  const getActiveTabFromPath = (pathname: string): string => {
+    if (pathname === '/conversations') return 'conversations';
+    if (pathname === '/interviews') return 'mock-interviews';
+    return 'conversations'; // Default fallback
+  };
+  
+  const [activeTab, setActiveTab] = useState<string>(getActiveTabFromPath(location.pathname));
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Reference for polling interval
 
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
@@ -67,6 +76,12 @@ const Home = () => {
   const [profileResumeUrl, setProfileResumeUrl] = useState<string | null>(null);
   const [profileJdUrl, setProfileJdUrl] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+  // Update active tab when URL path changes
+  useEffect(() => {
+    const newActiveTab = getActiveTabFromPath(location.pathname);
+    setActiveTab(newActiveTab);
+  }, [location.pathname]);
 
   // Function to check if any conversation is still processing
   const checkForProcessingConversations = (conversations: Conversation[]): boolean => {

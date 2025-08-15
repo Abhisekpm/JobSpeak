@@ -430,7 +430,7 @@ const ConversationDetail: React.FC = () => {
   };
 
   const handleBack = () => {
-    navigate(-1);
+    navigate('/conversations');
   };
 
   // Helper function to format date (can be moved to utils if needed)
@@ -487,7 +487,7 @@ const ConversationDetail: React.FC = () => {
         description: `Conversation "${conversation.name}" has been successfully deleted.`,
         variant: "default",
       });
-      navigate("/home");
+      navigate("/conversations");
     } catch (err: any) {
       console.error("Error deleting conversation:", err);
       toast({
@@ -564,7 +564,7 @@ const ConversationDetail: React.FC = () => {
     <div className="flex flex-col h-screen bg-gray-50 p-0 md:p-6 overflow-hidden">
       {/* Header Section */}
       <header className="flex items-center justify-between mb-2 md:mb-6 bg-white md:bg-transparent p-4 md:p-0 border-b md:border-b-0">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2 flex-shrink-0">
+        <Button variant="ghost" size="icon" onClick={handleBack} className="mr-2 flex-shrink-0">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex items-center space-x-2 flex-grow min-w-0 mx-2">
