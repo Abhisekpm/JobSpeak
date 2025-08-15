@@ -79,10 +79,10 @@ def process_transcription_task(conversation_id):
         deepgram_options = {
             'model': 'nova-2', 
             'language': 'en-US',
-            'punctuate': False, 
-            'diarize': False, 
-            'utterances': False, 
-            'smart_format': False, 
+            'punctuate': True, 
+            'diarize': True,     # Enable speaker diarization
+            'utterances': True,  # Enable utterance detection
+            'smart_format': True, 
             'channels': 1                # Keep channels
         }
 
@@ -96,8 +96,8 @@ def process_transcription_task(conversation_id):
              task_logger.warning(f"[Transcription Task] Deepgram returned no result for {conversation.id}. Marking failed.")
              raise ValueError("Transcription result was empty")
 
-        # Serialize the structured result to a JSON string before saving
-        conversation.transcription_text = json.dumps(structured_transcription_result)
+        # Store the structured result directly in the JSONField (Django handles serialization)
+        conversation.transcription_text = structured_transcription_result
         conversation.status_transcription = Conversation.STATUS_COMPLETED
         conversation.save(update_fields=['transcription_text', 'status_transcription', 'updated_at'])
         task_logger.info(f"[Transcription Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
@@ -151,15 +151,15 @@ def process_recap_task(conversation_id):
         conversation.save(update_fields=['status_recap', 'updated_at'])
         task_logger.info(f"[Recap Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
 
-        # Parse the stored JSON transcription
+        # Access the transcription data directly (JSONField automatically deserializes)
         try:
-            parsed_segments = json.loads(conversation.transcription_text)
+            parsed_segments = conversation.transcription_text
             if not isinstance(parsed_segments, list):
-                raise ValueError("Parsed transcription is not a list")
+                raise ValueError("Transcription data is not a list")
             # Format into a single string for the summarizer/recap
             formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            task_logger.error(f"[Recap Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
+        except (ValueError, TypeError) as e:
+            task_logger.error(f"[Recap Task] Invalid transcription format for {conversation.id}: {e}")
             raise ValueError(f"Invalid transcription format: {e}") # Propagate error
 
         if not formatted_transcript.strip():
@@ -386,15 +386,15 @@ def process_coaching_task(conversation_id):
         conversation.save(update_fields=['status_coaching', 'coaching_feedback', 'updated_at'])
         task_logger.info(f"[Coaching Task] Status set to PROCESSING for Conversation ID: {conversation.id}")
 
-        # Parse and format the stored JSON transcription
+        # Access the transcription data directly (JSONField automatically deserializes)
         try:
-            parsed_segments = json.loads(conversation.transcription_text)
+            parsed_segments = conversation.transcription_text
             if not isinstance(parsed_segments, list):
-                raise ValueError("Parsed transcription is not a list")
+                raise ValueError("Transcription data is not a list")
             # Format into a single string for the coaching service
             formatted_transcript = "\n".join([f"Speaker {seg.get('speaker', '?')}: {seg.get('transcript', '')}" for seg in parsed_segments])
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            task_logger.error(f"[Coaching Task] Failed to parse or format transcription JSON for {conversation.id}: {e}")
+        except (ValueError, TypeError) as e:
+            task_logger.error(f"[Coaching Task] Invalid transcription format for {conversation.id}: {e}")
             raise ValueError(f"Invalid transcription format: {e}") # Propagate error
 
         if not formatted_transcript.strip():
@@ -410,8 +410,8 @@ def process_coaching_task(conversation_id):
             task_logger.error(f"[Coaching Task] Coaching service failed or returned None for {conversation.id}")
             raise ValueError("Coaching service failed")
 
-        # Update model with results (feedback_result should be a string)
-        conversation.coaching_feedback = feedback_result
+        # Update model with results (store as JSON string for consistency)
+        conversation.coaching_feedback = json.dumps(feedback_result) if isinstance(feedback_result, dict) else str(feedback_result)
         conversation.status_coaching = Conversation.STATUS_COMPLETED
         conversation.save(update_fields=['coaching_feedback', 'status_coaching', 'updated_at'])
         task_logger.info(f"[Coaching Task] Status set to COMPLETED for Conversation ID: {conversation.id}")
@@ -524,10 +524,10 @@ def process_interview_transcription_task(interview_id):
         deepgram_options = {
             'model': 'nova-2', 
             'language': 'en-US',
-            'punctuate': False, 
-            'diarize': False, 
-            'utterances': False, 
-            'smart_format': False, 
+            'punctuate': True, 
+            'diarize': True,     # Enable speaker diarization
+            'utterances': True,  # Enable utterance detection
+            'smart_format': True, 
             'channels': 1                # Keep channels
         }
         num_answers_to_process = len(s3_keys)

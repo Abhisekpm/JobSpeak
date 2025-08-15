@@ -25,6 +25,8 @@ const TranscriptionView: React.FC<TranscriptionViewProps> = ({
   statusDisplay
 }) => {
 
+  // Remove debug logging now that the issue is identified and fixed
+
   // Helper function removed - parsing happens in parent or before passing prop
   // const parseTranscription = (): TranscriptionSegment[] | null => { ... };
 

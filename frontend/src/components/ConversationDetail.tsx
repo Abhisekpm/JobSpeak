@@ -535,21 +535,27 @@ const ConversationDetail: React.FC = () => {
   // --- Parse transcription_text before rendering --- 
   let parsedTranscription: TranscriptionSegment[] | null = null;
   if (conversation.transcription_text) {
-      try {
-          // Check if it's already an object/array (e.g., if Axios parsed it deeply)
-          if (typeof conversation.transcription_text === 'object' && Array.isArray(conversation.transcription_text)) {
-              parsedTranscription = conversation.transcription_text;
-          } else if (typeof conversation.transcription_text === 'string') {
-               // Attempt to parse if it's a string (most likely case)
-              const parsed = JSON.parse(conversation.transcription_text);
-              if (Array.isArray(parsed)) { // Basic validation
+      // With the backend fix, transcription_text should now be properly deserialized
+      if (Array.isArray(conversation.transcription_text)) {
+          parsedTranscription = conversation.transcription_text;
+      } else if (typeof conversation.transcription_text === 'string') {
+          // Fallback for existing data that might still be double-encoded
+          try {
+              let parsed = JSON.parse(conversation.transcription_text);
+              // Handle potential double-encoding from legacy data
+              if (typeof parsed === 'string') {
+                  parsed = JSON.parse(parsed);
+              }
+              if (Array.isArray(parsed)) {
                   parsedTranscription = parsed;
               } else {
-                   console.error("Parsed transcription_text is not an array:", parsed);
+                  console.error("Legacy transcription parsing failed - not an array:", parsed);
               }
+          } catch (error) {
+              console.error("Failed to parse legacy transcription string:", error);
           }
-      } catch (error) {
-          console.error("Failed to parse transcription_text JSON:", error, "Raw data:", conversation.transcription_text);
+      } else {
+          console.error("Unexpected transcription_text format:", typeof conversation.transcription_text);
       }
   }
   // --- End Parsing --- 
