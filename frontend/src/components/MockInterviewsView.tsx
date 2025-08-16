@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FloatingActionButton from './FloatingActionButton';
 import MockInterviewSetupModal from './MockInterviewSetupModal';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import MockInterviewInterface from './MockInterviewInterface';
 import InterviewCard, { Interview } from './InterviewCard';
 import apiClient from '../lib/apiClient';
@@ -34,6 +34,21 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
   const [activeInterviewQuestions, setActiveInterviewQuestions] = useState<string[]>([]);
   const [pastInterviews, setPastInterviews] = useState<Interview[]>([]);
   const [isLoadingInterviews, setIsLoadingInterviews] = useState<boolean>(false);
+  const [isBannerVisible, setIsBannerVisible] = useState(true);
+
+  // Check sessionStorage on component mount to restore banner visibility state
+  useEffect(() => {
+    const bannerDismissed = sessionStorage.getItem('mockInterviewsBannerDismissed');
+    if (bannerDismissed === 'true') {
+      setIsBannerVisible(false);
+    }
+  }, []);
+
+  // Handle banner dismissal with sessionStorage persistence
+  const handleDismissBanner = () => {
+    setIsBannerVisible(false);
+    sessionStorage.setItem('mockInterviewsBannerDismissed', 'true');
+  };
 
   // Fetch past interviews
   useEffect(() => {
@@ -107,16 +122,25 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
   return (
     <>
       {/* Styled Introductory Blurb */}
-      <div className="mb-8 p-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg shadow-lg">
-        <h2 className="text-3xl font-bold mb-3">Mock Interviews</h2>
-        <p className="text-lg">
-          Practice with AI to ace your next job interview. Upload your resume and the job description, or use your saved profile, to begin a tailored mock interview session.
-        </p>
-      </div>
+      {isBannerVisible && (
+        <div className="mb-8 p-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg shadow-lg relative">
+          <button
+            onClick={handleDismissBanner}
+            className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
+            aria-label="Dismiss banner"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <h2 className="text-3xl font-bold mb-3 pr-8">Mock Interviews</h2>
+          <p className="text-lg">
+            Practice with AI to ace your next job interview. Upload your resume and the job description, or use your saved profile, to begin a tailored mock interview session.
+          </p>
+        </div>
+      )}
 
       {/* Past Interviews Section */}
       <div>
-        <h3 className="text-xl font-semibold mb-6 text-gray-700">Your Past Interviews</h3>
+        
         {isLoadingInterviews ? (
           <div className="flex justify-center items-center h-32">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -132,9 +156,10 @@ const MockInterviewsView: React.FC<MockInterviewsViewProps> = ({
             ))}
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-6">
-            You haven't completed any mock interviews yet. Click "Practice Interview" below to start your first one!
-          </p>
+          <div className="text-center py-10">
+            <p className="text-gray-500">No mock interviews completed yet.</p>
+            <p className="text-sm text-gray-400 mt-2">Click the button below to start your first practice session.</p>
+          </div>
         )}
       </div>
 
