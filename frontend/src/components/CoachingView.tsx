@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader } from "./ui/card";
 import { Button } from "./ui/button";
 import { Copy, Loader2, AlertTriangle, Info } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -106,20 +106,19 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
   }
 
   return (
-    <Card className="p-4 h-full flex flex-col prose max-w-none">
-       {/* Header Section */}
-      <div className="flex justify-between items-center mb-4 flex-shrink-0 not-prose">
-        <h3 className="font-semibold text-lg m-0">Coaching Feedback</h3>
-        <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopy}>
-          <Copy className="h-4 w-4 mr-2" />
-          Copy
-        </Button>
-      </div>
+    <Card className="w-full h-full flex flex-col bg-white shadow-md">
+      <CardHeader className="pb-2 flex-shrink-0">
+        <div className="flex justify-between items-center">
+          <h3 className="font-semibold text-lg m-0">Coaching Feedback</h3>
+          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!canCopy}>
+            <Copy className="h-4 w-4 mr-2" />
+            Copy
+          </Button>
+        </div>
+      </CardHeader>
       
-      {/* Content Section - This div will grow and be scrollable if needed */}
-      <div className="flex-grow min-h-0 relative">
-        {/* ScrollArea wraps the conditional content rendering */}
-        <ScrollArea className="absolute inset-0 pr-3">
+      <ScrollArea className="flex-grow min-h-0">
+        <CardContent className="pt-4 pb-6 px-6">
           {status_coaching === 'pending' || status_coaching === 'processing' ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mr-2" /> Processing...
@@ -132,8 +131,8 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
               <div className="space-y-6">
                 {/* Strengths Section */}
                 <div>
-                  <h4 className="text-lg font-semibold text-green-700 mb-3 flex items-center">
-                    <span className="mr-2">✅</span> Strengths
+                  <h4 className="text-lg font-semibold text-green-700 mb-3">
+                    Strengths
                   </h4>
                   <ul className="space-y-2">
                     {parsedFeedback.strengths.map((strength, index) => (
@@ -147,8 +146,8 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
 
                 {/* Areas for Improvement */}
                 <div>
-                  <h4 className="text-lg font-semibold text-amber-700 mb-3 flex items-center">
-                    <span className="mr-2">🎯</span> Areas for Improvement
+                  <h4 className="text-lg font-semibold text-amber-700 mb-3">
+                    Areas for Improvement
                   </h4>
                   <ul className="space-y-2">
                     {parsedFeedback.areas_for_improvement.map((area, index) => (
@@ -162,8 +161,8 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
 
                 {/* Actionable Advice */}
                 <div>
-                  <h4 className="text-lg font-semibold text-blue-700 mb-3 flex items-center">
-                    <span className="mr-2">💡</span> Actionable Advice
+                  <h4 className="text-lg font-semibold text-blue-700 mb-3">
+                    Actionable Advice
                   </h4>
                   <div className="space-y-4">
                     {parsedFeedback.actionable_advice.map((advice, index) => (
@@ -177,8 +176,8 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
 
                 {/* Overall Impression */}
                 <div>
-                  <h4 className="text-lg font-semibold text-purple-700 mb-3 flex items-center">
-                    <span className="mr-2">📝</span> Overall Impression
+                  <h4 className="text-lg font-semibold text-purple-700 mb-3">
+                    Overall Impression
                   </h4>
                   <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-400">
                     <p className="text-gray-700 leading-relaxed">{parsedFeedback.overall_impression}</p>
@@ -202,10 +201,10 @@ const CoachingView: React.FC<CoachingViewProps> = ({ conversation }) => {
                   <Info className="h-6 w-6 mr-2" /> Coaching feedback not available.
               </div>
           )}
-        </ScrollArea>
-      </div>
+        </CardContent>
+      </ScrollArea>
     </Card>
   );
 };
 
-export default CoachingView; 
+export default CoachingView;
