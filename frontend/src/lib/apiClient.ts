@@ -8,6 +8,7 @@ console.log(`API Client configured with base URL: ${API_BASE_URL}`); // Add log 
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 300000, // 5 minutes timeout for large uploads
   headers: {
     'Content-Type': 'application/json'
   }

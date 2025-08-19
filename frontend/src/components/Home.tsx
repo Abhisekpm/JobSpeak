@@ -269,11 +269,13 @@ const Home = () => {
     formData.append("name", data.title || "Untitled Recording");
     formData.append("duration", String(Math.round(data.duration))); // Ensure duration is integer string
     // Append the audio blob with a filename
-    const fileName = `${data.title || "recording"}-${Date.now()}.wav`; // Example filename
+    const fileName = `${data.title || "recording"}-${Date.now()}.wav`;
     formData.append("audio_file", data.audio, fileName);
 
     try {
-      // Send POST request to the backend
+      console.log(`Starting upload for ${data.title || "Untitled Recording"} - Size: ${(data.audio.size / 1024 / 1024).toFixed(2)}MB`);
+      
+      // Send POST request to the backend with extended timeout for large files
       const response = await apiClient.post<Conversation>(
         "/conversations/",
         formData,
@@ -283,6 +285,13 @@ const Home = () => {
             // but specifying it can sometimes help avoid issues.
             "Content-Type": "multipart/form-data",
           },
+          timeout: 600000, // 10 minutes for conversation uploads (longer than default)
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentComplete = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              console.log(`Upload progress: ${percentComplete}% (${(progressEvent.loaded / 1024 / 1024).toFixed(2)}MB / ${(progressEvent.total / 1024 / 1024).toFixed(2)}MB)`);
+            }
+          }
         }
       );
       console.log("New conversation created, API response data:", response.data); // Log the response

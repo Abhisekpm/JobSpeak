@@ -54,16 +54,14 @@ const RecordingModal = ({
     };
   }, [isRecording, isPaused]);
 
-  // Mock recording functionality
+  // Audio recording functionality with chunked recording
   const startRecording = async () => {
     try {
-      // In a real implementation, we would use the MediaRecorder API
-      // This is a simplified mock version
       setIsRecording(true);
       setIsPaused(false);
       audioChunksRef.current = [];
 
-      // Simulate getting microphone access
+      // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // Create a MediaRecorder instance
@@ -72,18 +70,24 @@ const RecordingModal = ({
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          console.log(`Recording chunk received: ${event.data.size} bytes`);
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
+        console.log(`Recording stopped. Total chunks: ${audioChunksRef.current.length}`);
+        const totalSize = audioChunksRef.current.reduce((sum, chunk) => sum + chunk.size, 0);
+        console.log(`Total recording size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+        
         const audioBlob = new Blob(audioChunksRef.current, {
           type: "audio/wav",
         });
         setAudioBlob(audioBlob);
       };
 
-      mediaRecorder.start();
+      // Start with 5-second chunks to prevent memory accumulation
+      mediaRecorder.start(5000);
     } catch (error) {
       console.error("Error starting recording:", error);
     }
